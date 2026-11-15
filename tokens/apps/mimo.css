@@ -1,0 +1,13 @@
+/*
+ * Mimo's signature light: a PROPOSAL (2026-11-15), not decided yet. Rosé at the top, peach below.
+ * It lights only the face muscles an exercise works on, as Fluo's breath light lights only the lungs.
+ */
+@theme {
+  --color-light: #c2457a;
+  --color-light-2: #c8692e;
+}
+
+:root.dark {
+  --color-light: #ffc2d6;
+  --color-light-2: #ffd8b0;
+}

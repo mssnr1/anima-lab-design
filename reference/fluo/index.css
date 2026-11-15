@@ -1,0 +1,417 @@
+@import "tailwindcss";
+
+@import "@fontsource-variable/figtree";
+
+/*
+ * "Licht ist Atem": one dark room, one material (fine light lines), one rhythm.
+ * Colour roles: lavender and sky are breath light and appear only where breath is (figure, breath sign,
+ * history rings). Buttons and cards are neutral. Mint stands for an effect, red for acute help.
+ *
+ * The default tokens are the day look "Atlas" (paper white, the figure as an ink drawing);
+ * `:root.dark` is the night look, the app's default.
+ */
+@theme {
+  --color-paper: #f4f5f3;
+  --color-surface: #ebece8;
+  --color-surface-2: #e0e2dd;
+  --color-line: #d2d5ce;
+  --color-ink: #1a1f33;
+  --color-ink-2: #5a6078;
+  --color-muted: #6c7287;
+  /* Raised surfaces: sheets and the knob of a switch. */
+  --color-card: #fbfbf9;
+  --color-thumb: #ffffff;
+  /* Filled controls (primary button, selected segment, switch): neutral, never breath light. */
+  --color-solid: #1a1f33;
+  --color-on-solid: #f4f5f3;
+  /* Breath light, from the top of a breath (lavender) to its base (sky). */
+  --color-breath: #6f5cf0;
+  --color-breath-2: #4f7fd9;
+  /* An effect in the body. */
+  --color-effect: #17805f;
+  /* Acute help. */
+  --color-alert: #d93f38;
+  /* The ink of the night page, the same in both looks. */
+  --color-night: #0b0f16;
+  /* The veil under controls that float over the figure. */
+  --color-panel: rgb(244 245 243 / 0.72);
+  /*
+   * Type scale. Running text is `body`; nothing is set smaller than `fine`. Headlines use sizes of their own.
+   * fine 13 px: captions and tags. note 15 px: secondary lines. body 17 px: text, lists, buttons. lead 19 px: a line that leads.
+   */
+  --text-fine: 0.8125rem;
+  --text-note: 0.9375rem;
+  --text-body: 1.0625rem;
+  --text-lead: 1.1875rem;
+  --font-sans:
+    "Figtree Variable", "Figtree", "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+
+:root {
+  /* The breath clock (see lib/breathClock.ts) writes --b on elements that breathe; this is its resting value. */
+  --b: 0.62;
+}
+
+:root.dark {
+  --color-paper: #0b0f16;
+  --color-surface: #111722;
+  --color-surface-2: #19202e;
+  --color-line: #272c3a;
+  --color-ink: #f1f0fa;
+  --color-ink-2: #a9adc4;
+  --color-muted: #81869f;
+  --color-card: #131926;
+  --color-thumb: #f1f0fa;
+  --color-solid: #f1f0fa;
+  --color-on-solid: #0b0f16;
+  --color-breath: #c7bbff;
+  --color-breath-2: #7dd3fc;
+  --color-effect: #a7f3d0;
+  --color-alert: #ff6b63;
+  --color-panel: rgb(11 15 22 / 0.6);
+  /* The particle aura around the figure at night (the day colours live in Aura.tsx). */
+  --aura-cool: #1c2350;
+  --aura-warm: #6f5cf0;
+  --aura-rose: #9a8cff;
+  --aura-glow: #7dd3fc;
+  --aura-spark: #e6f6ff;
+}
+
+html {
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  background: var(--color-paper);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  font-weight: 400;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headlines: Figtree in a light cut, set tight. */
+.display {
+  font-weight: 300;
+  letter-spacing: -0.015em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.eyebrow {
+  font-size: var(--text-fine);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+}
+/*
+ * A line over the figure while breathing. It lies on the figure's lines and lights, so a soft cloud in
+ * the page's colour sits behind it and takes them back.
+ */
+.breath-cue {
+  text-wrap: balance;
+  text-shadow:
+    0 0 0.75rem var(--color-paper),
+    0 0 0.3rem var(--color-paper);
+}
+.breath-cue > span {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+  animation: fade-in 1600ms ease-out both;
+}
+.breath-cue > span::before {
+  content: "";
+  position: absolute;
+  inset: -1.4rem -2.6rem;
+  z-index: -1;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-paper) 84%, transparent) 42%, transparent);
+}
+/* The phase word of the practice screen: light, lower case, widely spaced. */
+.phase-word {
+  font-weight: 300;
+  letter-spacing: 0.16em;
+  text-transform: lowercase;
+}
+
+/*
+ * The breath sign (the o of the wordmark, the app icon, the simple view): a neutral outline with light
+ * lines that fill from below. Each line knows its index (--i); --n1 is the number of lines plus one.
+ * The level comes from --lv if set (a session, a finger), else from the breath clock's --b.
+ */
+.breath-sign {
+  display: block;
+  overflow: visible;
+}
+.breath-sign line {
+  opacity: clamp(var(--rest, 0.14), calc(var(--lv, var(--b)) * var(--n1) - var(--i)), 1);
+}
+
+/* The monoline wordmark: every letter is a single stroke in the weight of the sign's outline. */
+.fluo-mono {
+  display: inline-flex;
+  align-items: flex-end;
+  line-height: 1;
+  --g: 0.25em;
+}
+/* On the start screen the letters breathe apart and together. */
+.fluo-mono.live {
+  --g: calc(0.19em + 0.13em * var(--b));
+}
+.fluo-mono svg {
+  display: block;
+  flex: none;
+  height: 0.8em;
+  overflow: visible;
+}
+.fluo-mono svg + svg {
+  margin-left: var(--g);
+}
+.fluo-mono svg.kern {
+  margin-left: calc(var(--g) - 0.075em);
+}
+
+/* Quiet cards: a surface tone with a hairline, no gradient, no glow. */
+.fluo-card {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+/* Notes that float over the figure: frosted, neutral glass. */
+.fluo-tile {
+  background: color-mix(in srgb, var(--color-paper) 58%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 12%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+/* Start screen: the figure shows through the middle; the top and the lower third sink into the page. */
+.start-scrim {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--color-paper) 55%, transparent) 0%,
+    transparent 15%,
+    transparent 46%,
+    color-mix(in srgb, var(--color-paper) 86%, transparent) 66%,
+    var(--color-paper) 86%
+  );
+}
+/* Practice: a soft veil under the top bar and the controls, only while they show. */
+.veil-top {
+  background: linear-gradient(to bottom, var(--color-panel), transparent);
+}
+.veil-bottom {
+  background: linear-gradient(to top, var(--color-panel) 30%, transparent);
+}
+/* Controls that step back while breathing and return on a tap. */
+.chrome {
+  transition:
+    opacity 900ms ease,
+    visibility 0s linear 0s;
+}
+.chrome-off {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none !important;
+  transition:
+    opacity 1400ms ease,
+    visibility 0s linear 1400ms;
+}
+.chrome-off * {
+  pointer-events: none !important;
+}
+
+.safe-area {
+  padding-top: max(env(safe-area-inset-top), 1rem);
+  padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+}
+.safe-top {
+  padding-top: max(env(safe-area-inset-top), 1rem);
+}
+.safe-bottom {
+  padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+}
+/* Side gutters that respect the notch / rounded corners in landscape. */
+.safe-x {
+  padding-left: max(env(safe-area-inset-left), 0.75rem);
+  padding-right: max(env(safe-area-inset-right), 0.75rem);
+}
+@media (min-width: 48rem) {
+  .safe-x {
+    padding-left: max(env(safe-area-inset-left), 1.25rem);
+    padding-right: max(env(safe-area-inset-right), 1.25rem);
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+/* The ring of the exercise just done draws itself in on the history page. */
+@keyframes ring-draw {
+  from {
+    stroke-dasharray: 1 1;
+    stroke-dashoffset: 1;
+  }
+  99.9% {
+    stroke-dasharray: 1 1;
+    stroke-dashoffset: 0;
+  }
+  /* Closed again at the end, so no seam stays where the line began. */
+  to {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+}
+.ring-draw {
+  animation: ring-draw 1800ms cubic-bezier(0.45, 0, 0.2, 1) 400ms both;
+}
+/* The ring chosen on the history page. */
+.ring-glow {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--color-breath) 70%, transparent));
+}
+@media (prefers-reduced-motion: reduce) {
+  .ring-draw {
+    animation: none;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-in {
+  animation: fade-in 900ms ease-out both;
+}
+.fade-up {
+  animation: fade-up 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Introduction drawings: waves breathe, dotted air flows, the gauge needle sways. */
+.art-breathe {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: art-breathe 5.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+.art-slow {
+  animation-duration: 11s;
+}
+@keyframes art-breathe {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.78);
+  }
+}
+.art-flow {
+  animation: art-flow 1.8s linear infinite;
+}
+.art-flow-long {
+  animation: art-flow-long 2.6s linear infinite;
+}
+@keyframes art-flow-long {
+  to {
+    stroke-dashoffset: -13;
+  }
+}
+@keyframes art-flow {
+  to {
+    stroke-dashoffset: -9.2;
+  }
+}
+.art-needle {
+  transform-box: view-box;
+  transform-origin: 88px 40px;
+  animation: art-needle 5.5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes art-needle {
+  0%,
+  100% {
+    transform: rotate(-6deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+
+/* Body notes drift in like the breath: fade, rise a little, come into focus. */
+.insight-in {
+  animation: insight-in 1400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes insight-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .art-breathe,
+  .art-flow,
+  .art-flow-long,
+  .art-needle {
+    animation: none;
+  }
+  .fade-up,
+  .insight-in {
+    animation: fade-in 600ms ease-out both;
+  }
+}

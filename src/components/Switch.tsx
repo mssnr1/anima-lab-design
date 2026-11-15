@@ -1,0 +1,48 @@
+import { InfoIcon } from './icons'
+
+interface Props {
+  label: string
+  /** Second line under the label. */
+  hint?: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+  disabled?: boolean
+  /** Show an info mark next to the label, as in the settings sheet. */
+  info?: boolean
+  testId?: string
+  /** Bold label, as on the exercise page. */
+  strong?: boolean
+  /** Called with the new value before `onChange`, e.g. for a click sound or haptics (Fluo: `clickFeedback`). */
+  feedback?: (checked: boolean) => void
+}
+
+/** A settings row with an iOS-style toggle on the right. */
+export function Switch({ label, hint, checked, onChange, disabled, info, testId, strong, feedback }: Props) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      data-testid={testId}
+      onClick={() => {
+        feedback?.(!checked)
+        onChange(!checked)
+      }}
+      className="flex w-full items-center justify-between gap-4 py-3 text-left focus-visible:outline-2 focus-visible:outline-ink disabled:opacity-40"
+    >
+      <span className="min-w-0">
+        <span className={`flex items-center gap-1.5 text-ink ${strong ? 'text-body font-semibold' : 'text-body font-medium'}`}>
+          {label}
+          {info && <InfoIcon className="size-4 text-muted" strokeWidth={1.6} />}
+        </span>
+        {hint && <span className="mt-1 block text-note text-ink-2">{hint}</span>}
+      </span>
+      <span className={`relative h-[31px] w-[51px] shrink-0 rounded-full transition-colors ${checked ? 'bg-solid' : 'bg-surface-2 ring-1 ring-line'}`} aria-hidden>
+        <span
+          className={`absolute top-[2px] left-[2px] size-[27px] rounded-full shadow-[0_2px_6px_rgb(0_0_0/0.18)] transition-[transform,background-color] ${checked ? 'translate-x-5 bg-on-solid' : 'bg-thumb'}`}
+        />
+      </span>
+    </button>
+  )
+}
