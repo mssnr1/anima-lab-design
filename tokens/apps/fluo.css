@@ -1,0 +1,74 @@
+/*
+ * Fluo's signature light and brand pieces, on top of tokens.css.
+ * Breath light runs from the top of a breath (lavender) to its base (sky). Fluo's own code calls it
+ * `breath`/`breath-2`; the shared name is `light`/`light-2`, so shared components can use it in any app.
+ */
+@theme {
+  --color-light: #6f5cf0;
+  --color-light-2: #4f7fd9;
+  --color-breath: #6f5cf0;
+  --color-breath-2: #4f7fd9;
+}
+
+:root.dark {
+  --color-light: #c7bbff;
+  --color-light-2: #7dd3fc;
+  --color-breath: #c7bbff;
+  --color-breath-2: #7dd3fc;
+  /* The particle aura around the figure at night (the day colours live in Aura.tsx). */
+  --aura-cool: #1c2350;
+  --aura-warm: #6f5cf0;
+  --aura-rose: #9a8cff;
+  --aura-glow: #7dd3fc;
+  --aura-spark: #e6f6ff;
+}
+
+/* Fluo used these names before the shared ones. */
+.fluo-card {
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+.fluo-tile {
+  background: color-mix(in srgb, var(--color-paper) 58%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 12%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+/*
+ * The breath sign (the o of the wordmark, the app icon, the simple view): a neutral outline with light
+ * lines that fill from below. Each line knows its index (--i); --n1 is the number of lines plus one.
+ * The level comes from --lv if set (a session, a finger), else from the breath clock's --b.
+ */
+.breath-sign {
+  display: block;
+  overflow: visible;
+}
+.breath-sign line {
+  opacity: clamp(var(--rest, 0.14), calc(var(--lv, var(--b)) * var(--n1) - var(--i)), 1);
+}
+
+/* The monoline wordmark: every letter is a single stroke in the weight of the sign's outline. */
+.fluo-mono {
+  display: inline-flex;
+  align-items: flex-end;
+  line-height: 1;
+  --g: 0.25em;
+}
+/* On the start screen the letters breathe apart and together. */
+.fluo-mono.live {
+  --g: calc(0.19em + 0.13em * var(--b));
+}
+.fluo-mono svg {
+  display: block;
+  flex: none;
+  height: 0.8em;
+  overflow: visible;
+}
+.fluo-mono svg + svg {
+  margin-left: var(--g);
+}
+.fluo-mono svg.kern {
+  margin-left: calc(var(--g) - 0.075em);
+}
+

@@ -1,0 +1,754 @@
+"""
+Builds the atmen breathing anatomy from the Z-Anatomy Blender template.
+
+Run headless with Blender 5.x (or the `bpy` Python module):
+
+    blender -b -P blender/build_anatomy.py -- <Startup.blend> <out_dir>
+    python -I blender/build_anatomy.py <Startup.blend> <out_dir>
+
+`Startup.blend` is inside `Z-Anatomy.zip` from
+https://github.com/Z-Anatomy/Models-of-human-anatomy (CC BY-SA 4.0, models
+derived from BodyParts3D, CC BY-SA 2.1 Japan). Only BodyParts3D/Z-Anatomy
+geometry is used; the NC-licensed parts of the template (inner ear, kidney)
+are never touched.
+
+Output in <out_dir>:
+    atmen-anatomy.blend   editable scene with the prepared objects
+    atmen-anatomy.glb     mesh hierarchy, materials and morph targets for three.js
+
+Objects (all children of the empty `Anatomy`):
+    Body_Shell, Head                 skin of trunk and head (the belly is part of the trunk, so its lines run on)
+    Arms                             arms and hands, hanging relaxed beside the body
+    Legs                             skin below the navel: hips, legs and feet
+    Nasal_Cavity                     nasal mucosa and pharynx (upper airway)
+    Trachea, Bronchi                 trachea mesh and main/lobar bronchi
+    Lung_Left, Lung_Right            lobes joined per side
+    Heart                            atria and ventricles
+    Diaphragm
+
+Morph targets (shape keys), all 0 = resting/exhaled:
+    Lung_*.Inhale        3D expansion, mostly lower and lateral
+    Diaphragm.Inhale     dome flattens and descends
+    Body_Shell.Inhale    chest and belly fill out together, shoulders lift
+    Arms.Inhale          arms move out and up with the side of the chest and the shoulders
+    Heart.Beat           ventricles contract, atria fill
+"""
+
+import math
+import os
+import sys
+
+import bpy  # first: bmesh and mathutils come with it when run as a module
+import bmesh
+from mathutils import Matrix, Vector
+
+argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else sys.argv[1:]
+SOURCE, OUT = argv[0], argv[1]
+os.makedirs(OUT, exist_ok=True)
+
+bpy.ops.wm.open_mainfile(filepath=SOURCE, load_ui=False)
+src = bpy.data.objects
+
+# ---------------------------------------------------------------- selection
+
+LUNG_LEFT = ["Superior lobe of left lung", "Inferior lobe of left lung"]
+LUNG_RIGHT = ["Superior lobe of right lung", "Middle lobe of right lung", "Inferior lobe of right lung"]
+HEART = ["Left ventricle", "Right ventricle", "Left atrium", "Right atrium"]
+NASAL = ["Mucosa of nasal cavity", "Nasopharynx", "Oropharynx", "Laryngopharynx"]
+# Skin regions never wanted: hair, lashes, and the genital and anal regions (the figure stays neutral;
+# the gap they leave between the legs is capped in `cap_crotch`).
+SKIP_SKIN = ["Hairs", "Eyelashes", "Eyebrow", "Urogenital region", "Anal region"]
+# Shoulder caps and shoulder blades stay with the trunk; the rest of the upper limb forms the Arms object.
+ARM_COLLECTIONS = ("Left upper limb", "Right upper limb")
+TRUNK_OF_LIMB = ["Deltoid region", "Scapular region"]
+
+LOW_CUT = 0.975  # metres: the trunk's skin ends just below the navel, the Legs object takes over there
+
+
+def in_collection(o, name):
+    return any(c.name == name for c in o.users_collection)
+
+
+def skin_regions():
+    picked = {"Head": [], "Body_Shell": [], "Arms": [], "Legs": []}
+    for o in src:
+        if o.type != "MESH" or len(o.data.vertices) <= 10 or not in_collection(o, "9: Regions of human body"):
+            continue
+        if any(s.lower() in o.name.lower() for s in SKIP_SKIN):
+            continue
+        base = o.name.rsplit(".", 1)[0]
+        if any(in_collection(o, c) for c in ARM_COLLECTIONS) and base not in TRUNK_OF_LIMB:
+            picked["Arms"].append(o)
+            continue
+        if in_collection(o, "Head"):
+            picked["Head"].append(o)
+            continue
+        zs = [(o.matrix_world @ Vector(c)).z for c in o.bound_box]
+        # Regions across the cut go to both sides of it; each object keeps only its own half.
+        if min(zs) < LOW_CUT - 0.002:
+            picked["Legs"].append(o)
+        if max(zs) < LOW_CUT + 0.02:
+            continue
+        picked["Body_Shell"].append(o)
+    return picked
+
+
+# ------------------------------------------------------------- mesh helpers
+
+
+def bake(objects, name, subdiv=0, keep_mirror=True):
+    """Evaluated copies of `objects` (modifiers applied as chosen) joined into one new mesh object."""
+    bm = bmesh.new()
+    deps = bpy.context.evaluated_depsgraph_get()
+    for o in objects:
+        saved = []
+        for m in o.modifiers:
+            want = (m.type == "MIRROR" and keep_mirror) or (m.type == "SUBSURF" and subdiv > 0)
+            saved.append((m, m.show_viewport))
+            m.show_viewport = want
+            if m.type == "SUBSURF":
+                m.levels = subdiv
+        deps.update()
+        if o.type == "CURVE":
+            ev = o.evaluated_get(deps)
+            me = bpy.data.meshes.new_from_object(ev, depsgraph=deps)
+        else:
+            me = bpy.data.meshes.new_from_object(o.evaluated_get(deps), depsgraph=deps)
+        me.transform(o.matrix_world)
+        bm.from_mesh(me)
+        bpy.data.meshes.remove(me)
+        for m, v in saved:
+            m.show_viewport = v
+    # Template objects already use our names; take a working name and rename at the end.
+    mesh = bpy.data.meshes.new("atmen_" + name)
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new("atmen_" + name, mesh)
+    # Linked so the depsgraph evaluates its modifiers (subdivide, decimate).
+    bpy.context.scene.collection.objects.link(obj)
+    return obj
+
+
+def clean(obj, merge=0.0004, subdivide=0, target_faces=None):
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=merge)
+    bmesh.ops.dissolve_degenerate(bm, edges=bm.edges, dist=1e-6)
+    loose = [v for v in bm.verts if not v.link_faces]
+    bmesh.ops.delete(bm, geom=loose, context="VERTS")
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.to_mesh(obj.data)
+    bm.free()
+    if subdivide:
+        m = obj.modifiers.new("sub", "SUBSURF")
+        m.levels = subdivide
+        apply_modifiers(obj)
+    if target_faces and len(obj.data.polygons) > target_faces:
+        m = obj.modifiers.new("dec", "DECIMATE")
+        m.ratio = target_faces / len(obj.data.polygons)
+        m.use_collapse_triangulate = True
+        apply_modifiers(obj)
+    for p in obj.data.polygons:
+        p.use_smooth = True
+
+
+def apply_modifiers(obj):
+    deps = bpy.context.evaluated_depsgraph_get()
+    me = bpy.data.meshes.new_from_object(obj.evaluated_get(deps), depsgraph=deps)
+    obj.modifiers.clear()
+    old = obj.data
+    obj.data = me
+    bpy.data.meshes.remove(old)
+
+
+def cut_below(obj, z):
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, z), plane_no=(0, 0, 1), clear_inner=True)
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def cut_above(obj, z):
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, z), plane_no=(0, 0, -1), clear_inner=True)
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+def boundary_loops(bm):
+    """Open edge loops of the mesh, as lists of edges."""
+    todo = {e for e in bm.edges if e.is_boundary}
+    loops = []
+    while todo:
+        e = todo.pop()
+        loop, stack = [e], [e]
+        while stack:
+            for v in stack.pop().verts:
+                for n in v.link_edges:
+                    if n in todo:
+                        todo.remove(n)
+                        loop.append(n)
+                        stack.append(n)
+        loops.append(loop)
+    return loops
+
+
+def cap_crotch(obj):
+    """Closes the gap left between the legs by the skipped genital and anal regions."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    for loop in boundary_loops(bm):
+        vs = {v for e in loop for v in e.verts}
+        c = sum((v.co for v in vs), Vector()) / len(vs)
+        if abs(c.x) < 0.04 and c.z < 0.9 and len(vs) > 6:
+            bmesh.ops.holes_fill(bm, edges=loop, sides=0)
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])
+    bm.to_mesh(obj.data)
+    bm.free()
+
+
+# The arms hang relaxed: from the template's anatomical pose (palms forward) the forearms turn
+# the palms in, and the arms swing a little further out, so there is air between arms and trunk.
+SHOULDER = Vector((0.185, 0.0, 1.375))  # pivot of the left shoulder joint (x mirrored for the right)
+ARM_SWING = math.radians(-4)
+ELBOW_Z, WRIST_Z = 1.1, 0.85
+PALM_TURN = math.radians(70)
+
+
+def relax_arms(obj):
+    me = obj.data
+    # Centre of each arm per 1 cm slice: the forearm turns about its own long axis.
+    slices = {}
+    for v in me.vertices:
+        k = (v.co.x >= 0, round(v.co.z * 100))
+        acc = slices.setdefault(k, [Vector(), 0])
+        acc[0] += v.co
+        acc[1] += 1
+
+    def centre(side, z):
+        for dz in range(0, 6):
+            for k in ((side, round(z * 100) + dz), (side, round(z * 100) - dz)):
+                if k in slices:
+                    return slices[k][0] / slices[k][1]
+        return Vector()
+
+    wrist = {True: centre(True, WRIST_Z), False: centre(False, WRIST_Z)}
+    for v in me.vertices:
+        p = v.co.copy()
+        left = p.x >= 0
+        side = 1.0 if left else -1.0
+        # Forearm and hand: turn about the forearm's long axis, nothing at the elbow, fully from the wrist down.
+        t = smoothstep(ELBOW_Z, WRIST_Z, p.z)
+        if t > 0:
+            c = centre(left, p.z) if p.z > WRIST_Z else wrist[left]
+            rel = Vector((p.x - c.x, p.y - c.y, 0))
+            rel.rotate(Matrix.Rotation(t * PALM_TURN * -side, 3, "Z"))
+            p.x, p.y = c.x + rel.x, c.y + rel.y
+        # Whole arm: swing out about the shoulder, fading out toward the shoulder cap so the seam stays put.
+        w = smoothstep(1.31, 1.18, p.z)
+        pivot = Vector((side * SHOULDER.x, SHOULDER.y, SHOULDER.z))
+        p = pivot + Matrix.Rotation(side * ARM_SWING * w, 3, "Y") @ (p - pivot)
+        v.co = p
+    me.update()
+
+
+def set_origin_to_center(obj):
+    me = obj.data
+    c = sum((v.co for v in me.vertices), Vector()) / max(1, len(me.vertices))
+    me.transform(Matrix.Translation(-c))
+    obj.location = c
+
+
+# ---------------------------------------------------------------- materials
+
+
+def material(name, color, alpha, roughness=0.5, emission=None, strength=0.0):
+    m = bpy.data.materials.new(name)
+    m.use_nodes = True
+    bsdf = m.node_tree.nodes.get("Principled BSDF")
+    bsdf.inputs["Base Color"].default_value = (*color, 1)
+    bsdf.inputs["Alpha"].default_value = alpha
+    bsdf.inputs["Roughness"].default_value = roughness
+    if emission:
+        bsdf.inputs["Emission Color"].default_value = (*emission, 1)
+        bsdf.inputs["Emission Strength"].default_value = strength
+    m.surface_render_method = "BLENDED" if alpha < 1 else "DITHERED"
+    return m
+
+
+def srgb(hex_):
+    h = hex_.lstrip("#")
+    c = [int(h[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
+
+
+MATS = {
+    "Skin": material("Skin", srgb("#eef1f6"), 0.18, 0.7),
+    "Lung": material("Lung", srgb("#7fa8f8"), 0.42, 0.45),
+    "Airway": material("Airway", srgb("#3d7bff"), 0.85, 0.3, emission=srgb("#5b8fff"), strength=1.5),
+    "Heart": material("Heart", srgb("#f0806f"), 0.95, 0.45),
+    "Diaphragm": material("Diaphragm", srgb("#f4b49a"), 0.85, 0.55),
+}
+
+
+def assign(obj, mat):
+    obj.data.materials.clear()
+    obj.data.materials.append(MATS[mat])
+
+
+# -------------------------------------------------------------- shape keys
+
+
+def smoothstep(a, b, x):
+    t = min(max((x - a) / (b - a), 0.0), 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def add_key(obj, name, displace):
+    """Basis plus one shape key whose vertices are moved by `displace(co, i)`."""
+    if not obj.data.shape_keys:
+        obj.shape_key_add(name="Basis", from_mix=False)
+    key = obj.shape_key_add(name=name, from_mix=False)
+    for i, v in enumerate(obj.data.vertices):
+        key.data[i].co = v.co + displace(v.co, i)
+    return key
+
+
+def bounds(obj):
+    vs = [v.co for v in obj.data.vertices]
+    return Vector((min(v.x for v in vs), min(v.y for v in vs), min(v.z for v in vs))), Vector(
+        (max(v.x for v in vs), max(v.y for v in vs), max(v.z for v in vs))
+    )
+
+
+def lung_inhale(obj):
+    """The lungs follow the chest wall all round (they cling to it through the
+    pleura) and the diaphragm below, so they grow everywhere, most at the base."""
+    lo, hi = bounds(obj)
+    c = (lo + hi) / 2
+    h = hi.z - lo.z
+
+    def d(co, _):
+        low = 1 - smoothstep(lo.z, hi.z, co.z)  # 1 at the base, 0 at the apex
+        w = 0.7 + 0.3 * low
+        lateral = (co.x - c.x) / ((hi.x - lo.x) / 2)
+        front = (co.y - c.y) / ((hi.y - lo.y) / 2)
+        rise = 0.03 * h * (1 - low) ** 2  # the apex lifts a little with the upper ribs
+        # In a deep breath the lungs widen clearly to the sides and front, not only downwards.
+        return Vector((0.32 * w * lateral * (hi.x - lo.x) / 2, 0.26 * w * front * (hi.y - lo.y) / 2, -0.11 * h * low**1.5 + rise))
+
+    add_key(obj, "Inhale", d)
+
+
+def diaphragm_inhale(obj):
+    lo, hi = bounds(obj)
+
+    def d(co, _):
+        dome = smoothstep(lo.z, hi.z, co.z)  # dome top 1, rib attachments 0
+        return Vector((0, 0, -0.034 * dome**1.3 - 0.004 * dome))
+
+    add_key(obj, "Inhale", d)
+
+
+def boundary_falloff(obj, width):
+    """Per vertex 0 at open edges of the mesh, rising to 1 at `width` metres inside."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    edge_vs = [v.co.copy() for v in bm.verts if any(e.is_boundary for e in v.link_edges)]
+    bm.free()
+    out = []
+    for v in obj.data.vertices:
+        dmin = min(((v.co - e).length for e in edge_vs), default=width)
+        out.append(smoothstep(0, width, dmin))
+    return out
+
+
+def body_grow(yc):
+    """Displacement of the chest wall at world point `w` for a full breath (see `body_inhale`)."""
+
+    def d(w):
+        # The rib cage grows from the waist up, in one long soft ramp, and calms toward the neck:
+        # the chest fills out, the neck only barely (it carries no lung).
+        rise = smoothstep(0.98, 1.3, w.z)
+        trunk = rise * (1 - smoothstep(1.38, 1.5, w.z))
+        shoulder = smoothstep(1.36, 1.48, w.z)
+        out = Vector((w.x, w.y - yc, 0))
+        if out.length > 1e-6:
+            out.normalize()
+        front = 0.7 + 0.5 * smoothstep(yc + 0.03, yc - 0.06, w.y)  # front of the chest is -Y
+        grow = out * (0.009 * front * (1 - 0.4 * shoulder))
+        # The lower ribs swing out to the sides most (the lungs widen there), so the flanks keep ahead of them.
+        lower = 1 - smoothstep(1.2, 1.38, w.z)
+        grow += Vector((0.006 * lower * out.x, 0, 0))
+        # The shoulders lift a little; the lift fades out up the neck, so the neck is hardly stretched.
+        lift = Vector((0, 0, 0.0015 + 0.003 * shoulder)) * rise * (1 - smoothstep(1.46, 1.56, w.z))
+        # Belly breathing: below the ribs the front of the belly moves out with the chest, most in the middle.
+        belly = smoothstep(0.98, 1.06, w.z) * (1 - smoothstep(1.16, 1.3, w.z))
+        front_only = smoothstep(yc - 0.02, yc - 0.08, w.y)
+        mid = 1 - min(1.0, abs(w.x) / 0.15) ** 2
+        return grow * trunk + lift + Vector((0, -0.0085 * belly * front_only * mid, 0))
+
+    return d
+
+
+def chest_centre(body):
+    m = body.matrix_world
+    band_ys = [(m @ v.co).y for v in body.data.vertices if 1.15 < (m @ v.co).z < 1.4]
+    return (min(band_ys) + max(band_ys)) / 2
+
+
+ARMPIT_Z = 1.3  # below this the arms follow the side of the chest at this height (see `arms_inhale`)
+
+
+def body_inhale(obj, joined, arms):
+    """The whole upper body fills out: the rib cage widens all round, most at
+    the front, and the shoulders lift and spread a little with it. Only the open
+    edges at the neck and below the navel stay put; where the arms
+    join, they move along (see `arms_inhale`), so the outline
+    stays smooth there."""
+    m = obj.matrix_world
+    world = [m @ v.co for v in obj.data.vertices]
+    seam = {}
+    for o in joined:
+        for v in o.data.vertices:
+            p = o.matrix_world @ v.co
+            seam.setdefault((round(p.x * 50), round(p.y * 50), round(p.z * 50)), []).append(p)
+
+    def near_joined(w):
+        kx, ky, kz = round(w.x * 50), round(w.y * 50), round(w.z * 50)
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    for p in seam.get((kx + dx, ky + dy, kz + dz), ()):
+                        if (p - w).length < 0.012:
+                            return True
+        return False
+
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    edge = [world[v.index] for v in bm.verts if any(e.is_boundary for e in v.link_edges) and not near_joined(world[v.index])]
+    bm.free()
+    fall = [smoothstep(0, 0.04, min(((w - e).length for e in edge), default=0.04)) for w in world]
+    grow = body_grow(chest_centre(obj))
+    inv = m.to_3x3().inverted()
+    # Round the armpit the chest wall takes on the arms' motion, so the two meet without a step.
+    arm_cells = {}
+    for v in arms.data.vertices:
+        p = arms.matrix_world @ v.co
+        arm_cells.setdefault((round(p.x * 25), round(p.y * 25), round(p.z * 25)), []).append(p)
+
+    def arm_dist(w):
+        kx, ky, kz = round(w.x * 25), round(w.y * 25), round(w.z * 25)
+        best = 1.0
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    for p in arm_cells.get((kx + dx, ky + dy, kz + dz), ()):
+                        best = min(best, (p - w).length)
+        return best
+
+    def d(_, i):
+        w = world[i]
+        a = 1 - smoothstep(0.012, 0.04, arm_dist(w))
+        g = grow(w).lerp(grow(Vector((w.x, w.y, max(w.z, ARMPIT_Z)))), a)
+        return inv @ (g * fall[i])
+
+    add_key(obj, "Inhale", d)
+
+
+def arms_inhale(arms, body):
+    """The arms ride along with the chest wall where they join it: each moves as one
+    piece, out and up as the side of the rib cage and the shoulder do, so there is no
+    kink at the armpit."""
+    grow = body_grow(chest_centre(body))
+    m = arms.matrix_world
+    inv = m.to_3x3().inverted()
+
+    def d(co, _):
+        w = m @ co
+        # Below the armpit the whole arm follows the side of the chest at armpit height.
+        return inv @ grow(Vector((w.x, w.y, max(w.z, ARMPIT_Z))))
+
+    add_key(arms, "Inhale", d)
+
+
+def heart_beat(obj):
+    lo, hi = bounds(obj)
+    c = (lo + hi) / 2
+
+    def d(co, _):
+        r = co - c
+        apex = 1 - smoothstep(lo.z, hi.z, co.z)  # ventricles sit low
+        return r * (-0.07 * apex + 0.025 * (1 - apex))
+
+    add_key(obj, "Beat", d)
+
+
+# ------------------------------------------------------------------- build
+
+parts = {}
+
+regions = skin_regions()
+for name, objs in regions.items():
+    print(name, len(objs), "skin regions")
+    o = bake(objs, name)
+    clean(o, merge=0.0012, subdivide=1)
+    if name == "Body_Shell":
+        cut_below(o, LOW_CUT)
+    if name == "Legs":
+        cut_above(o, LOW_CUT)
+        cap_crotch(o)
+    if name == "Arms":
+        relax_arms(o)
+    clean(o, target_faces={"Body_Shell": 11000, "Head": 7000, "Arms": 6000, "Legs": 7000}[name])
+    for a in list(o.data.color_attributes):  # the limbs carry the template's vertex colours; not used
+        o.data.color_attributes.remove(a)
+    assign(o, "Skin")
+    parts[name] = o
+
+parts["Nasal_Cavity"] = bake([src[n] for n in NASAL], "Nasal_Cavity", subdiv=1)
+clean(parts["Nasal_Cavity"], target_faces=2500)
+assign(parts["Nasal_Cavity"], "Airway")
+
+parts["Trachea"] = bake([src["Trachea"]], "Trachea")
+clean(parts["Trachea"], target_faces=1800)
+assign(parts["Trachea"], "Airway")
+
+# The template has the bronchi only as thin label curves. Their centre lines
+# become the route of the air and, as tubes of airway calibre, the Bronchi mesh.
+
+
+def bronchus_chains():
+    tr = src["Trachea"]
+    ws = [tr.matrix_world @ v.co for v in tr.data.vertices]
+    zb = min(w.z for w in ws)
+    carina = sum((w for w in ws if w.z < zb + 0.006), Vector()) / max(1, len([w for w in ws if w.z < zb + 0.006]))
+
+    def polyline(name):
+        sp = src[name].data.splines[0]  # the first spline is the bronchus itself
+        pts = [src[name].matrix_world @ p.co.to_3d() for p in (list(sp.bezier_points) or list(sp.points))]
+        return pts
+
+    def chain(main, lobar):
+        m = polyline(main)
+        if (m[0] - carina).length > (m[-1] - carina).length:
+            m.reverse()
+        lb = polyline(lobar)
+        if (lb[0] - m[-1]).length > (lb[-1] - m[-1]).length:
+            lb.reverse()
+        out = []
+        for p in m + lb:
+            if not out or (out[-1] - p).length > 1e-4:
+                out.append(p)
+        return out
+
+    return {
+        "left_upper": chain("Left main bronchus", "Left superior lobar bronchus"),
+        "left_lower": chain("Left main bronchus", "Left inferior lobar bronchus"),
+        "right_upper": chain("Right main bronchus", "Right superior lobar bronchus"),
+        "right_lower": chain("Right main bronchus", "Right inferior lobar bronchus"),
+    }
+
+
+CHAINS = bronchus_chains()
+cu = bpy.data.curves.new("atmen_bronchi", "CURVE")
+cu.dimensions = "3D"
+cu.bevel_depth = 0.0056
+cu.bevel_resolution = 3
+cu.use_fill_caps = True
+for pts in CHAINS.values():
+    sp = cu.splines.new("POLY")
+    sp.points.add(len(pts) - 1)
+    for i, p in enumerate(pts):
+        sp.points[i].co = (*p, 1)
+        # Main bronchi are wider than the lobar ones; taper along the chain.
+        sp.points[i].radius = 1.0 - 0.4 * i / max(1, len(pts) - 1)
+    sp.use_smooth = True
+bronchi_curve = bpy.data.objects.new("atmen_bronchi_curve", cu)
+bpy.context.scene.collection.objects.link(bronchi_curve)
+parts["Bronchi"] = bake([bronchi_curve], "Bronchi")
+bpy.data.objects.remove(bronchi_curve)
+clean(parts["Bronchi"], merge=0.0002, subdivide=1, target_faces=3000)
+assign(parts["Bronchi"], "Airway")
+
+parts["Lung_Left"] = bake([src[n] for n in LUNG_LEFT], "Lung_Left", subdiv=1)
+parts["Lung_Right"] = bake([src[n] for n in LUNG_RIGHT], "Lung_Right", subdiv=1)
+for n in ("Lung_Left", "Lung_Right"):
+    clean(parts[n], target_faces=4500)
+    assign(parts[n], "Lung")
+
+parts["Heart"] = bake([src[n] for n in HEART], "Heart", subdiv=1)
+clean(parts["Heart"], merge=0.0008, target_faces=4000)
+assign(parts["Heart"], "Heart")
+
+parts["Diaphragm"] = bake([src["Diaphragm"]], "Diaphragm", subdiv=1)
+clean(parts["Diaphragm"], target_faces=4000)
+assign(parts["Diaphragm"], "Diaphragm")
+
+# ------------------------------------------------------------ airway paths
+
+
+def gl(v):
+    """Blender Z-up world position to glTF/three.js Y-up."""
+    return [round(v.x, 5), round(v.z, 5), round(-v.y, 5)]
+
+
+def lung_points(obj, n, rng):
+    """
+    `n` points spread evenly through the whole volume of a lung, so the air can
+    fill it out to its edges, plus its centre. A point is inside when a ray
+    from it crosses the surface an odd number of times.
+    """
+    from mathutils.bvhtree import BVHTree
+
+    mw = obj.matrix_world
+    vs = [mw @ v.co for v in obj.data.vertices]
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.transform(mw)
+    tree = BVHTree.FromBMesh(bm)
+    bm.free()
+    lo = Vector([min(v[i] for v in vs) for i in range(3)])
+    hi = Vector([max(v[i] for v in vs) for i in range(3)])
+
+    def inside(p):
+        hits, o, d = 0, p.copy(), Vector((0.31, 0.17, 0.94)).normalized()
+        while True:
+            loc, _, _, _ = tree.ray_cast(o, d)
+            if loc is None:
+                return hits % 2 == 1
+            hits += 1
+            o = loc + d * 1e-5
+
+    pts = []
+    while len(pts) < n:
+        p = Vector([rng.uniform(lo[i], hi[i]) for i in range(3)])
+        if inside(p):
+            pts.append(p)
+    c = sum(pts, Vector()) / len(pts)
+    return [gl(p) for p in pts], gl(c)
+
+
+def airway_paths():
+    """
+    Centre lines the app moves the air volume along, plus points inside each
+    lung for the air to spread to. Taken from the same source geometry.
+    """
+    import random
+
+    random.seed(7)
+    tr = parts["Trachea"]
+    ws = [tr.matrix_world @ v.co for v in tr.data.vertices]
+    z0, z1 = min(w.z for w in ws), max(w.z for w in ws)
+    trachea = []
+    for k in range(7):
+        z = z1 - (z1 - z0) * k / 6
+        ring = [w for w in ws if abs(w.z - z) < 0.006] or ws
+        trachea.append(sum(ring, Vector()) / len(ring))
+
+    def center(names):
+        pts = [src[n].matrix_world @ Vector(c) for n in names for c in src[n].bound_box]
+        return sum(pts, Vector()) / len(pts)
+
+    nasal = center(["Mucosa of nasal cavity"])
+    nose_tip = max((src[n].matrix_world @ v.co for n in ("Nasal region.l", "Nasal region.r") for v in src[n].data.vertices), key=lambda w: -w.y)
+    nostril = Vector((0, nose_tip.y + 0.012, nose_tip.z - 0.012))
+    upper = [
+        Vector((0, nostril.y - 0.07, nostril.z - 0.02)),  # outside, in front of the nose
+        nostril,
+        Vector((0, nasal.y - 0.01, nasal.z - 0.006)),
+        Vector((0, center(["Nasopharynx"]).y + 0.004, center(["Nasopharynx"]).z)),
+        Vector((0, center(["Oropharynx"]).y + 0.012, center(["Oropharynx"]).z)),
+        Vector((0, center(["Laryngopharynx"]).y - 0.004, center(["Laryngopharynx"]).z)),
+    ]
+    branches = {k: [gl(p) for p in v] for k, v in CHAINS.items()}
+
+    left_pts, left_c = lung_points(parts["Lung_Left"], 900, random)
+    right_pts, right_c = lung_points(parts["Lung_Right"], 900, random)
+    return {
+        "note": "Generated by blender/build_anatomy.py from Z-Anatomy geometry. glTF coordinates (Y up, metres).",
+        "trunk": [gl(p) for p in upper] + [gl(p) for p in trachea],
+        "branches": branches,
+        "lungs": {"left": {"center": left_c, "points": left_pts}, "right": {"center": right_c, "points": right_pts}},
+    }
+
+
+# ---------------------------------------------------------- new clean scene
+
+# Empty the template's scene and keep only the prepared objects.
+scene = bpy.context.scene
+for c in list(scene.collection.children):
+    scene.collection.children.unlink(c)
+for o in list(scene.collection.objects):
+    scene.collection.objects.unlink(o)
+for s in list(bpy.data.scenes):
+    if s != scene:
+        bpy.data.scenes.remove(s)
+root = bpy.data.objects.new("Anatomy", None)
+scene.collection.objects.link(root)
+for o in parts.values():
+    scene.collection.objects.link(o)
+    o.parent = root
+    set_origin_to_center(o)
+
+import json
+
+bpy.context.view_layer.update()  # matrix_world reflects the new origins
+with open(os.path.join(OUT, "airway-paths.json"), "w") as f:
+    json.dump(airway_paths(), f)
+
+for n in ("Lung_Left", "Lung_Right"):
+    lung_inhale(parts[n])
+diaphragm_inhale(parts["Diaphragm"])
+body_inhale(parts["Body_Shell"], [parts["Arms"]], parts["Arms"])
+arms_inhale(parts["Arms"], parts["Body_Shell"])
+heart_beat(parts["Heart"])
+
+# Drop all template data no longer used, so the saved .blend holds only our scene.
+for c in list(bpy.data.collections):
+    bpy.data.collections.remove(c)
+keep = set(parts.values()) | {root}
+for o in list(bpy.data.objects):
+    if o not in keep:
+        bpy.data.objects.remove(o)
+# Also the template's definitions (Wikipedia texts), fonts, images, script and
+# materials, none of which the model uses.
+for t in list(bpy.data.texts):
+    bpy.data.texts.remove(t)
+for i in list(bpy.data.images):
+    bpy.data.images.remove(i)
+for m in list(bpy.data.materials):
+    if m not in MATS.values():
+        bpy.data.materials.remove(m)
+for f in list(bpy.data.fonts):
+    bpy.data.fonts.remove(f)
+bpy.data.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+for name, o in parts.items():
+    o.name = name
+    o.data.name = name
+for name, m in MATS.items():
+    m.name = name
+
+for o in parts.values():
+    print(f"{o.name:14s} verts {len(o.data.vertices):6d} faces {len(o.data.polygons):6d} keys {[k.name for k in o.data.shape_keys.key_blocks] if o.data.shape_keys else []}")
+
+bpy.ops.wm.save_as_mainfile(filepath=os.path.join(OUT, "atmen-anatomy.blend"), compress=True)
+
+bpy.ops.export_scene.gltf(
+    filepath=os.path.join(OUT, "atmen-anatomy.glb"),
+    export_format="GLB",
+    use_selection=False,
+    export_apply=False,
+    export_morph=True,
+    export_morph_normal=True,
+    export_morph_tangent=False,
+    export_materials="EXPORT",
+    export_yup=True,
+    export_texcoords=False,
+    export_normals=True,
+    export_extras=True,
+    export_copyright="Z-Anatomy (CC BY-SA 4.0), BodyParts3D, DBCLS (CC BY-SA 2.1 JP); adapted for atmen, CC BY-SA 4.0",
+)
+print("done")
