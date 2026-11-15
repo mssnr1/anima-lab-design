@@ -303,5 +303,6 @@ bones.set({ vHand: 0.5, mouthO: 1 })                 // Posen mischen, Anteil 0 
   Finger mit `fingers`, Mund mit `rot`/`move`), in `POSES` eintragen, Skript laufen lassen.
 
 Bekannte kleine Schwächen: bei weit erhobenem Arm leichte Falten an der Achsel und am Unterarm nahe dem
-Handgelenk, eine kleine Falte am Knöchel des eingerollten kleinen Fingers.
+Handgelenk, eine kleine Falte am Knöchel des eingerollten kleinen Fingers; der Rand des weit geöffneten Munds wird bei starker
+Vergrößerung etwas kantig (das Kopfnetz ist dort grob).
 

@@ -44,7 +44,8 @@ model.traverse((o) => {
   if (!mesh.isMesh) return
   if (mesh.name === 'Mouth_Inner') {
     // The dark inside of the open mouth (rigged figure only).
-    mesh.material = new THREE.MeshBasicMaterial({ color: dark ? 0x05060c : 0x2b2530 })
+    // Pushed back a little in depth: where its rim meets the lips, the lips stay in front.
+    mesh.material = new THREE.MeshBasicMaterial({ color: dark ? 0x05060c : 0x2b2530, polygonOffset: true, polygonOffsetFactor: 4, polygonOffsetUnits: 64 })
     mesh.renderOrder = 0.15
     return
   }
