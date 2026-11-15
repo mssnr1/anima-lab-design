@@ -216,3 +216,11 @@ die Lunge in Fluo: ruhige, rund geformte Bereiche statt anatomischer Einzelteile
 
 Offen: Die Wange nach innen (`buccinator`) zeigt kleine Risse, weil dort der Rumpf (`Body_Shell`) bis über den
 Kiefer reicht; ein eigener Kopf-Hals-Export (siehe Abschnitt 7) löst das. Am Mundspalt bleibt ein kleiner Punkt.
+
+**Tag-Look (überarbeitet):** Ruhende Muskelbereiche zeigen am Tag nur feine graue Konturen, keine Faserlinien. Erst ein
+arbeitender Bereich bekommt Faserlinien und eine zarte Fläche im Signaturlicht. Der Nachtlook bleibt unverändert.
+
+**Gesichtsübungen:** `src/engine/faceExercise.ts` beschreibt eine Übung als getaktete Schritte (`intro`, `steps` ×
+`repetitions`, `outro`). Jeder Schritt sagt, wie stark welche Bereiche am Ende arbeiten, und `facePose(übung, ms)`
+liefert die Pose zu jedem Zeitpunkt (Werte direkt in `rig.set`). Ein erster Entwurf „Brauen-Lift“ liegt in
+`preview/exercises.ts` (Vorschau: `?exercise=brow`, fester Zeitpunkt mit `&t=10000`).

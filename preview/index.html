@@ -13,6 +13,12 @@
       body.dark #ui button { background: #ffffff14; color: inherit; border-color: #ffffff33; }
       #ui button.on { background: #c2457a; color: #fff; }
       body.shot #ui { display: none; }
+      #caption { position: fixed; z-index: 2; left: 0; right: 0; bottom: 28px; text-align: center; color: #1a1f33; font-size: 15px; line-height: 1.4; pointer-events: none; }
+      #caption:empty { display: none; }
+      #caption b { display: block; font-size: 22px; font-weight: 600; letter-spacing: 0.01em; margin-bottom: 4px; color: #c2457a; }
+      #caption span { display: inline-block; max-width: 520px; padding: 0 16px; opacity: 0.75; }
+      body.dark #caption { color: #e3dcff; }
+      body.dark #caption b { color: #ffc2d6; }
     </style>
   </head>
   <body>

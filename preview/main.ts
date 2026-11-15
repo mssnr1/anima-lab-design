@@ -2,6 +2,8 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import modelUrl from '../models/atmen-anatomy.glb?url'
+import { facePose } from '../src/engine/faceExercise'
+import { BROW_LIFT } from './exercises'
 import { FACE_AREAS, FACE_MUSCLES, FACE_PALETTES, faceActivation, faceMuscleMaterial, faceMuscleRig, makeStripeMaterials, muscleHead, STRIPE_PALETTES } from '../src/figure'
 
 /**
@@ -85,6 +87,11 @@ const cams = (view === 'both' ? ['front', 'side'] : [view]).map((v) => {
 })
 
 const demo = q.has('demo')
+const exercise = q.get('exercise') === 'brow' ? BROW_LIFT : null
+const fixedT = q.has('t') ? Number(q.get('t')) : null
+const caption = document.createElement('div')
+caption.id = 'caption'
+document.body.appendChild(caption)
 const clock = new THREE.Clock()
 function frame() {
   const w = innerWidth
@@ -97,6 +104,12 @@ function frame() {
       rig.set(id, Math.max(0, Math.sin(phase)) ** 2 * (Math.floor(phase / Math.PI) % 2 === 0 ? 1 : 0))
     })
   }
+  if (exercise) {
+    const pose = facePose(exercise, fixedT ?? (clock.getElapsedTime() * 1000) % 140000)
+    for (const id of FACE_MUSCLES) rig.set(id, pose.muscles[id] ?? 0)
+    const rep = pose.repetition >= 0 ? ` · ${pose.repetition + 1}/${exercise.repetitions}` : ''
+    caption.innerHTML = `<b>${pose.step.label}${rep}</b><span>${pose.step.cue ?? ''}</span>`
+  }
   renderer.clear()
   const part = w / cams.length
   cams.forEach((cam, i) => {
@@ -105,7 +118,9 @@ function frame() {
     renderer.setViewport(i * part, 0, part, h)
     renderer.render(scene, cam)
   })
-  requestAnimationFrame(frame)
+  // A still (a fixed time in an exercise, or a screenshot) needs only a few frames.
+  if (!(q.has('shot') && !demo && (fixedT !== null || !exercise)) || ++frames < 3) requestAnimationFrame(frame)
 }
+let frames = 0
 frame()
 ;(window as unknown as { ready: boolean }).ready = true

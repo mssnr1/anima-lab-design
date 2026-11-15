@@ -421,20 +421,22 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
         float low = 1.0 - smoothstep(${f(SKIN_GRADIENT.x)}, ${f(SKIN_GRADIENT.y)}, vRest.y);
         vec3 cLine = mix(uLine, uLow, low);
 
-        // Resting: ink lines (fibres quieter than the skin's, borders clear), fill close to the page.
-        float lineA = plain ? ${dark ? '0.5' : '0.34'} : ${dark ? '0.3' : '0.22'};
-        float borderA = ${dark ? '0.62' : '0.5'} * uOutline;
-        vec3 col = mix(uBase, cLine, line);
+        // Resting. At night: lines and outlines in the figure's glow. By day (an ink drawing on paper) the
+        // resting areas stay almost silent: hairline outlines, fibres barely there, so the face reads as one
+        // calm surface and only a working area draws the eye.
+        float lineA = plain ? ${dark ? '0.5' : '0.34'} : ${dark ? '0.3' : '0.94'};
+        float borderA = ${dark ? '0.62' : '0.26'} * uOutline;
+        vec3 col = mix(uBase, cLine, line * (plain ? 1.0 : ${dark ? '1.0' : '0.0'}));
         float a = mix(${dark ? '0.9' : '0.94'}, lineA, line);
-        col = mix(col, cLine, outline);
+        col = mix(col, ${dark ? 'cLine' : 'mix(cLine, uBase, 0.72)'}, outline);
         a = mix(a, max(a, borderA), outline);
 
-        // Working: the area's lines and border take the light, a soft wash fills it, brightest just inside the border.
+        // Working: the area's lines and outline take the light and a wash fills it${dark ? ', brightest just inside the border' : ''}.
         float inner = 1.0 - smoothstep(${f(INSET)}, 0.008, depth);
-        float wash = act * (1.0 - gutter) * (${dark ? '0.16' : '0.1'} + ${dark ? '0.45' : '0.3'} * inner);
+        float wash = act * (1.0 - gutter) * (${dark ? '0.16 + 0.45 * inner' : '0.14 + 0.1 * inner'});
         col = mix(col, cLight, wash);
-        col = mix(col, cLight, act * line);
-        a = max(a, act * line);
+        col = mix(col, cLight, act * line * ${dark ? '1.0' : '0.5'});
+        a = max(a, act * line * ${dark ? '1.0' : '0.7'});
         col = mix(col, cLight, act * outline);
         a = max(a, act * outline);
 
