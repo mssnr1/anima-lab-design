@@ -30,7 +30,7 @@ type Built = { curve: THREE.QuadraticBezierCurve3; head: THREE.Mesh; tube: THREE
 
 /** A group of guide arrows (mirrored pairs) with `update(grow, opacity, time)` to animate them. */
 export function guideArrows(arrows: readonly GuideArrow[], o: GuideArrowOptions) {
-  const radius = o.radius ?? 0.0022
+  const radius = o.radius ?? 0.0028
   const uniforms = {
     uColor: { value: new THREE.Color(o.color) },
     uColor2: { value: new THREE.Color(o.color2 ?? o.color) },
@@ -58,12 +58,14 @@ export function guideArrows(arrows: readonly GuideArrow[], o: GuideArrowOptions)
       uniform vec3 uColor; uniform vec3 uColor2; uniform float uGrow; uniform float uOpacity; uniform float uTime;
       varying float vAlong; varying vec3 vN; varying vec3 vView;
       void main() {
-        if (vAlong > uGrow + 0.001) discard;
+        // The head is marked with a negative value: it is always drawn (it sits at the growing tip).
+        float along = vAlong < 0.0 ? 1.0 : vAlong;
+        if (vAlong >= 0.0 && vAlong > uGrow + 0.001) discard;
         // Soft at the start, full toward the tip; a light pulse runs along it.
-        float body = smoothstep(0.0, 0.35, vAlong);
-        float pulse = exp(-pow((fract(vAlong * 0.8 - uTime * 0.7) - 0.5) * 6.0, 2.0));
+        float body = smoothstep(0.0, 0.35, along);
+        float pulse = exp(-pow((fract(along * 0.8 - uTime * 0.7) - 0.5) * 6.0, 2.0));
         float facing = abs(dot(normalize(vN), normalize(vView)));
-        vec3 col = mix(uColor2, uColor, smoothstep(0.0, 1.0, vAlong));
+        vec3 col = mix(uColor2, uColor, smoothstep(0.0, 1.0, along));
         col = mix(col, vec3(1.0), 0.35 * pulse * ${o.glow ? '1.0' : '0.0'});
         float a = uOpacity * mix(0.35, 1.0, body) * mix(0.55, 1.0, facing) * (0.8 + 0.4 * pulse);
         gl_FragColor = ${o.glow ? 'vec4(col * a, 1.0)' : 'vec4(col, min(a, 1.0))'};
@@ -73,9 +75,9 @@ export function guideArrows(arrows: readonly GuideArrow[], o: GuideArrowOptions)
   const group = new THREE.Group()
   group.renderOrder = 10
   const built: Built[] = []
-  const headGeometry = new THREE.ConeGeometry(radius * 2.6, radius * 6, 20, 1)
-  headGeometry.translate(0, radius * 3, 0)
-  headGeometry.setAttribute('along', new THREE.Float32BufferAttribute(new Float32Array(headGeometry.attributes.position.count).fill(1), 1))
+  const headGeometry = new THREE.ConeGeometry(radius * 2.8, radius * 6.5, 24, 1)
+  headGeometry.translate(0, radius * 2.5, 0)
+  headGeometry.setAttribute('along', new THREE.Float32BufferAttribute(new Float32Array(headGeometry.attributes.position.count).fill(-1), 1))
   for (const arrow of arrows) {
     const sides = arrow.single ? [1] : [1, -1]
     for (const side of sides) {
