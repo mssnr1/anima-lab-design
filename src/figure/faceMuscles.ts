@@ -488,7 +488,7 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
  * neighbours along, fading over about this distance, so the seam between them moves as one piece and
  * keeps its width instead of being squeezed or torn.
  */
-const PUSH = 0.014
+const PUSH = 0.028
 
 /**
  * Adds one relative morph target per moving muscle area (named by the area's id, e.g. `zygomaticusLeft`)
