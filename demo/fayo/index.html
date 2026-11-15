@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="de" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d1120" />
+    <title>Fayo · Brauen-Lift</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="stage"></div>
+
+    <header class="top">
+      <span class="brand">Fayo</span>
+      <button id="theme" class="ghost" aria-label="Tag oder Nacht">☾</button>
+    </header>
+
+    <section id="start" class="screen">
+      <div class="sheet">
+        <p class="eyebrow">Übung · 2½ Minuten</p>
+        <h1>Brauen-Lift</h1>
+        <p class="lead">Trainiert den Stirnmuskel, der die Augenbrauen hebt, für einen wacheren Blick.</p>
+        <ol class="how">
+          <li>Zeigefinger waagerecht direkt unter die Augenbrauen legen.</li>
+          <li>Brauen gegen den sanften Widerstand der Finger nach oben drücken.</li>
+          <li>Halten, Augen weit, Stirn bleibt glatt. Dann lösen.</li>
+        </ol>
+        <button id="go" class="solid" disabled>Lädt …</button>
+        <p class="fine">8 Wiederholungen. Bei Schmerzen oder Spannungskopfschmerz abbrechen.</p>
+      </div>
+    </section>
+
+    <section id="run" class="screen hidden" aria-live="polite">
+      <div class="guide">
+        <div class="meta"><span id="rep"></span><span id="count"></span></div>
+        <h2 id="step"></h2>
+        <p id="cue"></p>
+        <div class="bar"><i id="progress"></i></div>
+        <div class="row">
+          <button id="pause" class="ghost-pill">Pause</button>
+          <button id="stop" class="ghost-pill">Beenden</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="done" class="screen hidden">
+      <div class="sheet">
+        <p class="eyebrow">Geschafft</p>
+        <h1>Gut gemacht.</h1>
+        <p class="lead">Spür kurz nach: Stirn locker, Blick offen. Täglich ein Durchgang reicht für den Anfang.</p>
+        <button id="again" class="solid">Nochmal</button>
+      </div>
+    </section>
+
+    <footer class="credit">Anatomie nach Z-Anatomy (CC BY-SA 4.0) und BodyParts3D (CC BY-SA 2.1 JP). Prototyp, keine medizinische Beratung.</footer>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

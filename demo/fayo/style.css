@@ -1,0 +1,62 @@
+@import "@fontsource-variable/figtree";
+
+/* Anima tokens (tokens/tokens.css) and Mimo's signature light (tokens/apps/mimo.css), as plain variables. */
+:root {
+  --paper: #fbfbf9;
+  --ink: #1a1f33;
+  --ink-2: #5a6078;
+  --solid: #1a1f33;
+  --on-solid: #f4f5f3;
+  --panel: rgb(251 251 249 / 0.78);
+  --line: rgb(26 31 51 / 0.12);
+  --light: #c2457a;
+  --light-2: #c8692e;
+  --font: "Figtree Variable", "Figtree", system-ui, -apple-system, sans-serif;
+}
+:root.dark {
+  --paper: #0d1120;
+  --ink: #e9e6ff;
+  --ink-2: #a49fd0;
+  --solid: #e9e6ff;
+  --on-solid: #0d1120;
+  --panel: rgb(13 17 32 / 0.66);
+  --line: rgb(233 230 255 / 0.14);
+  --light: #ffc2d6;
+  --light-2: #ffd8b0;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: var(--font); -webkit-font-smoothing: antialiased; overflow: hidden; }
+button { font: inherit; cursor: pointer; }
+#stage, #stage canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+.top { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: calc(env(safe-area-inset-top) + 14px) 18px 0; z-index: 3; }
+.brand { font-weight: 650; letter-spacing: 0.02em; font-size: 17px; }
+.ghost { background: none; border: 1px solid var(--line); color: var(--ink); width: 38px; height: 38px; border-radius: 99px; font-size: 16px; }
+
+.screen { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; display: flex; justify-content: center; padding: 0 16px calc(env(safe-area-inset-bottom) + 44px); transition: opacity 0.5s; }
+.hidden { opacity: 0; pointer-events: none; }
+
+.sheet { width: 100%; max-width: 420px; margin-bottom: 4px; background: var(--panel); -webkit-backdrop-filter: blur(18px) saturate(1.2); backdrop-filter: blur(18px) saturate(1.2); border: 1px solid var(--line); border-radius: 28px; padding: 24px 22px 20px; }
+.eyebrow { margin: 0 0 4px; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--light); font-weight: 600; }
+h1 { margin: 0 0 6px; font-size: 30px; font-weight: 650; letter-spacing: -0.01em; }
+.lead { margin: 0 0 12px; font-size: 16px; line-height: 1.45; color: var(--ink-2); }
+.how { margin: 0 0 18px; padding-left: 18px; font-size: 14px; line-height: 1.45; color: var(--ink-2); }
+.how li { margin-bottom: 4px; }
+.solid { width: 100%; height: 54px; border: 0; border-radius: 99px; background: var(--solid); color: var(--on-solid); font-size: 17px; font-weight: 600; }
+.solid:disabled { opacity: 0.5; }
+.fine { margin: 12px 0 0; font-size: 13px; color: var(--ink-2); text-align: center; }
+
+.guide { width: 100%; max-width: 440px; text-align: center; }
+.meta { display: flex; justify-content: space-between; font-size: 15px; color: var(--ink-2); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+#count { color: var(--ink); font-weight: 600; }
+h2 { margin: 0 0 6px; font-size: 34px; font-weight: 650; color: var(--light); letter-spacing: -0.01em; }
+#cue { margin: 0 auto 16px; min-height: 4.4em; max-width: 360px; font-size: 17px; line-height: 1.45; }
+.bar { height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; margin-bottom: 18px; }
+.bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--light-2), var(--light)); }
+.row { display: flex; gap: 10px; justify-content: center; }
+.ghost-pill { flex: 1; max-width: 160px; height: 46px; border-radius: 99px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); font-size: 15px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+
+.credit { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 10px); text-align: center; font-size: 11px; color: var(--ink-2); opacity: 0.7; padding: 0 16px; z-index: 1; }
+/* A soft veil of page colour under the guide, so the text reads over the figure's lines. */
+#run { padding-top: 70px; background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--paper) 88%, transparent) 38%); }

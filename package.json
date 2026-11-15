@@ -23,7 +23,9 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p .",
-    "preview:face": "vite --config preview/vite.config.ts"
+    "preview:face": "vite --config preview/vite.config.ts",
+    "demo:fayo": "vite --config demo/fayo/vite.config.ts",
+    "build:fayo": "vite build --config demo/fayo/vite.config.ts"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0"
