@@ -90,7 +90,7 @@ const DEFS: AreaDef[] = [
   { muscle: 'nasalis', label: 'Nase', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.566], r: [0.009, 0.026] }], fibre: { kind: 'along', angle: 0 }, motion: { kind: 'shift', dir: [0, 1, 0], amount: 0.0015 } },
   { muscle: 'orbicularisOris', label: 'Mund', side: 'mid', cores: [{ kind: 'ellipse', c: [0, MOUTH_Y + 0.001], r: [0.03, 0.019] }], fibre: { kind: 'rings', c: [0, MOUTH_Y], r: [1.6, 1] }, motion: { kind: 'toward', to: [0, MOUTH_Y, 0.075], amount: 0.2, shift: [0, 0, 0.0035] } },
   { muscle: 'mentalis', label: 'Kinn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.483], r: [0.017, 0.011] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, 0.5, 1], amount: 0.0028 } },
-  { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }, { kind: 'capsule', a: [0.019, 1.611], b: [0.043, 1.613], r: 0.008 }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.22 } } },
+  { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }, { kind: 'capsule', a: [0.014, 1.611], b: [0.049, 1.612], r: 0.0085 }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.22 } } },
   { muscle: 'levatorLabii', label: 'Oberlippe', side: 'pair', cores: [{ kind: 'capsule', a: [0.02, 1.568], b: [0.021, 1.544], r: 0.0065 }], fibre: { kind: 'along', angle: 84 }, motion: { kind: 'shift', dir: [0.1, 1, 0.2], amount: 0.0022 } },
   { muscle: 'zygomaticus', label: 'Jochbein', side: 'pair', cores: [{ kind: 'capsule', a: [0.066, 1.566], b: [0.036, 1.532], r: 0.009 }], fibre: { kind: 'along', angle: 49 }, motion: { kind: 'toward', to: [0.06, 1.57, 0.05], amount: 0.16 } },
   { muscle: 'buccinator', label: 'Wange', side: 'pair', cores: [{ kind: 'ellipse', c: [0.064, 1.517], r: [0.013, 0.015] }], fibre: { kind: 'along', angle: 6 }, motion: { kind: 'swell', amount: -0.0015 } },
@@ -192,10 +192,19 @@ function coreDistance(c: Core, s: number, y: number): number {
   }
 }
 
+/** How softly the cores of one muscle area merge into one shape (chart metres): no waist where they meet. */
+const MERGE = 0.01
+/** A smooth minimum: two cores of one area flow into each other. */
+const smin = (a: number, b: number) => {
+  if (!Number.isFinite(a)) return b
+  const h = Math.max(MERGE - Math.abs(a - b), 0) / MERGE
+  return Math.min(a, b) - (h * h * MERGE) / 4
+}
+
 /** Distance (chart metres) from a chart point to an area's core; negative inside it. */
 export function areaDistance(area: FaceArea, s: number, y: number): number {
   let d = Infinity
-  for (const c of area.cores) d = Math.min(d, coreDistance(c, s, y))
+  for (const c of area.cores) d = area.neutral ? Math.min(d, coreDistance(c, s, y)) : smin(d, coreDistance(c, s, y))
   return d * area.weight
 }
 
@@ -290,11 +299,12 @@ float sdCapsule(vec2 p, vec2 a, vec2 b, float r) {
   float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
   return length(pa - ba * h) - r;
 }
+float smin(float a, float b) { float h = max(${f(MERGE)} - abs(a - b), 0.0) / ${f(MERGE)}; return min(a, b) - h * h * ${f(MERGE / 4)}; }
 vec2 rot2(vec2 p, float t) { return vec2(p.x * cos(t) + p.y * sin(t), -p.x * sin(t) + p.y * cos(t)); }
 vec2 faceChart(vec3 w) { return vec2(atan(w.x, w.z - ${f(CHART.axisZ)}) * ${f(CHART.radius)}, w.y); }
 void faceAreas(vec2 p, out int id, out int next, out float d1, out float d2, out float depth) {
   float ds[${FACE_AREAS.length}];
-${FACE_AREAS.map((a) => `  ds[${a.index}] = ${a.cores.map(coreGlsl).reduce((x, y) => `min(${x}, ${y})`)} * ${f(a.weight)};`).join('\n')}
+${FACE_AREAS.map((a) => `  ds[${a.index}] = ${a.cores.map(coreGlsl).reduce((x, y) => `${a.neutral ? 'min' : 'smin'}(${x}, ${y})`)} * ${f(a.weight)};`).join('\n')}
   d1 = 1e9; d2 = 1e9; id = 0; next = 0;
   for (int i = 0; i < ${FACE_AREAS.length}; i++) {
     float d = ds[i];
