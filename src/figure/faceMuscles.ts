@@ -513,6 +513,15 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
  */
 const PUSH = 0.028
 
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(Math.max((x - a) / (b - a), 0), 1)
+  return t * t * (3 - 2 * t)
+}
+const keep = new THREE.Vector3()
+/** How much a world point belongs to the nose (1 on it, fading over its edges): its shape stays. */
+const noseShare = (p: THREE.Vector3) =>
+  (1 - smoothstep(0.013, 0.024, Math.abs(p.x))) * smoothstep(1.527, 1.537, p.y) * (1 - smoothstep(1.592, 1.608, p.y)) * smoothstep(0.072, 0.082, p.z)
+
 /**
  * Adds one relative morph target per moving muscle area (named by the area's id, e.g. `zygomaticusLeft`)
  * to a head geometry, after any it already has (e.g. `Calm`), with normals. Each area moves as its muscle
@@ -573,6 +582,7 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
     nw.fromBufferAttribute(nrm, i).applyMatrix3(normalMatrix).normalize()
     const dist = dists[i]
     const nearest = dist[nearestOf[i]]
+    const nose = noseShare(w)
     // Each area moves fully up to its border (where it is the nearest) and carries the skin beyond it
     // along, fading with the distance past the border (half the difference of the two distances).
     moving.forEach((a, k) => {
@@ -586,6 +596,8 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
       if (weight < 1e-3) return
       motionAt(a.motion, w, nw, move)
       if (a.index !== nearestOf[i]) move.clampLength(0, most[k])
+      // The nose keeps its shape: what the cheeks and lips do around it barely widens or flattens it.
+      if (nose > 0 && !a.id.startsWith('nasalis')) move.multiply(keep.set(1 - 0.88 * nose, 1 - 0.6 * nose, 1 - 0.8 * nose))
       move.multiplyScalar(weight / scale)
       deltas[k].set([move.x, move.y, move.z], i * 3)
     })
