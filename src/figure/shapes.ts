@@ -1,10 +1,12 @@
 import * as THREE from 'three'
 import { airwaySurface } from './airwayShape'
 import { addCalmMorph } from './face'
+import { addMuscleMorphs } from './faceMuscles'
 import { withHolesFilled } from './holes'
 import { tidiedLegs } from './legShape'
 import { addLimbAxis } from './limbs'
 import { simplifiedLung } from './lungShape'
+import { subdivided } from './subdivide'
 
 /**
  * The shapes the figure is drawn with are worked out from the model: each lung as a smooth shell, the
@@ -48,6 +50,23 @@ export function closedHead(head: THREE.Mesh): THREE.BufferGeometry {
     source.userData.closed = closed
   }
   return closed ?? source
+}
+
+/**
+ * The head for the face exercises: closed like `closedHead` (with its `Calm` morph), four times as fine,
+ * with one morph per moving face muscle area (see `addMuscleMorphs`), so the face can work area by area.
+ */
+export function muscleHead(head: THREE.Mesh): THREE.BufferGeometry {
+  const source = head.geometry
+  if (source.userData.muscleMorphs) return source
+  let made = source.userData.muscles as THREE.BufferGeometry | undefined
+  if (!made) {
+    head.updateWorldMatrix(true, false)
+    made = subdivided(closedHead(head))
+    addMuscleMorphs(made, head.matrixWorld)
+    source.userData.muscles = made
+  }
+  return made
 }
 
 /** Gives the arms the axis their skin lines run round (see `addLimbAxis`). */

@@ -187,3 +187,32 @@ Die Figur ist auf Atmen gebaut. Für Gesichtsyoga reicht sie so nicht:
 - Nicht verwenden: die NC-lizenzierten Teile der Vorlage (Innenohr, Niere), die Gehirnmodelle der University
   of Washington, Wikipedia-Texte, Schriften und Bilder aus der Vorlage. Der Build entfernt sie.
 - Schrift Figtree: SIL Open Font License.
+
+---
+
+## 9. Gesichtsmuskeln (Fayo/Mimo), Stand 15.11.2026
+
+`src/figure/faceMuscles.ts` legt eine **Karte der mimischen Muskulatur** über Kopf und Hals, vereinfacht wie
+die Lunge in Fluo: ruhige, rund geformte Bereiche statt anatomischer Einzelteile.
+
+- **Keine eigenen Meshes:** Jeder Punkt der Haut gehört genau zu einem Bereich (dem mit dem nächsten Kern),
+  die Bereiche decken also die ganze Fläche lückenlos ab. Die Grenzen werden pro Pixel im Shader aus der
+  Ruheform berechnet, deshalb sind sie glatt, egal wie grob das Mesh ist, und wandern mit der Haut mit.
+- **Bereiche** (`FACE_AREAS`, paarige als `…Left`/`…Right`, links = +x der Figur): Stirn (`frontalis`),
+  Zornesfalte (`corrugator`), Nase (`nasalis`), Mund (`orbicularisOris`), Kinn (`mentalis`), Auge
+  (`orbicularisOculi`), Oberlippe (`levatorLabii`), Jochbein (`zygomaticus`), Wange (`buccinator`),
+  Mundwinkel (`depressor`), Kiefer (`masseter`), Schläfe (`temporalis`), Halsseite (`sternocleidomastoid`),
+  Hals (`platysma`); dazu die neutralen Flächen Kopf (`scalp`) und Körper (`body`).
+- **Linien:** In jedem Bereich laufen feine Linien in Faserrichtung (Ringe um Auge und Mund, senkrecht auf der
+  Stirn, schräg am Jochbein, Fächer an der Schläfe), überall mit demselben Abstand (`FIBRE_SPACING` 2,6 mm).
+  Jeder Bereich hat eine eigene Kontur knapp innerhalb seiner Grenze, an Dreier-Ecken abgerundet. Kopfhaut
+  und Körper behalten exakt die Körperlinien (`around`, Dichte 120), Rumpf, Arme und Beine laufen nahtlos weiter.
+- **Material:** `faceMuscleMaterial({ palette, dark, activation })` statt `skin` auf `Head` und `Body_Shell`
+  (mit demselben Tiefen-Vorpass). Farben `FACE_PALETTES` = Figur + Mimo-Signaturlicht (Rosé oben, Pfirsich unten).
+- **Animation:** `muscleHead(head)` (in `shapes.ts`) schließt den Kopf, teilt ihn viermal feiner (`subdivide.ts`)
+  und hängt pro beweglichem Bereich einen Morph an (nach `Calm`). `faceMuscleRig(activation, [head, headDepth])`
+  mit `rig.set('zygomaticusLeft', 0..1)` lässt den Bereich leuchten und bewegt ihn.
+- **Vorschau:** `npm run preview:face`, Parameter `theme=dark`, `view=front|side|both`, `act=frontalis:1,…`, `demo`.
+
+Offen: Die Wange nach innen (`buccinator`) zeigt kleine Risse, weil dort der Rumpf (`Body_Shell`) bis über den
+Kiefer reicht; ein eigener Kopf-Hals-Export (siehe Abschnitt 7) löst das. Am Mundspalt bleibt ein kleiner Punkt.
