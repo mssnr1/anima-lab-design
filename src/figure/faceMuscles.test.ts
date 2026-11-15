@@ -150,4 +150,18 @@ describe('further movements', () => {
     expect(up).toBeGreaterThan(0)
     expect(down).toBeLessThan(0)
   })
+
+  it('lets an area follow another without lighting it', () => {
+    const { geometry, matrix } = headSphere()
+    addMuscleMorphs(geometry, matrix)
+    const mesh = new THREE.Mesh(geometry)
+    const activation = faceActivation()
+    const rig = faceMuscleRig(activation, [mesh])
+    const nose = FACE_AREAS.find((a) => a.id === 'nasalis')!
+    rig.follow('nasalis', 0.3)
+    expect(activation.value[nose.index]).toBe(0)
+    expect(mesh.morphTargetInfluences![mesh.morphTargetDictionary!.nasalis]).toBeCloseTo(0.3)
+    rig.set('nasalis', 0.5)
+    expect(mesh.morphTargetInfluences![mesh.morphTargetDictionary!.nasalis]).toBeCloseTo(0.8)
+  })
 })

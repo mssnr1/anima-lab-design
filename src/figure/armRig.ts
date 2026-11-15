@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { addLimbAxis } from './limbs'
 
 /**
  * Moves the figure's arms (the `Arms` mesh, which has no skeleton) so it can show a movement with its
@@ -8,8 +9,8 @@ import * as THREE from 'three'
  * shoulder. A pose is given for the figure's left arm (+x) and mirrored for the right.
  *
  * The rig bakes the mesh into world space (float positions and normals, morph targets dropped) and keeps
- * the unposed position as a `rest` attribute, so a stripe material with `rest: true` (`posedSkin` from
- * `makeStripeMaterials`) keeps its lines on the skin while the arm moves.
+ * the unposed position as a `rest` attribute and the hanging arm's `axis`, so `posedLimbs` from
+ * `makeStripeMaterials` keeps its lines running round each arm, on the skin, while the arm moves.
  */
 export type ArmGoal = {
   /** Where the wrist goes, world metres, left arm. */
@@ -70,6 +71,8 @@ export function armRig(mesh: THREE.Mesh) {
   geometry.setAttribute('normal', new THREE.BufferAttribute(restN.slice(), 3))
   geometry.setAttribute('rest', new THREE.BufferAttribute(rest, 3))
   for (const name of Object.keys(src.attributes)) if (!['position', 'normal'].includes(name)) geometry.setAttribute(name, src.getAttribute(name))
+  // The lines run round each arm, measured on the hanging arm (see `posedLimbs`).
+  addLimbAxis(geometry)
   geometry.computeBoundingSphere()
   geometry.boundingSphere!.radius += 0.6
   mesh.geometry = geometry

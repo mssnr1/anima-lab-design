@@ -449,6 +449,22 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
         col = mix(col, cLight, act * outline);
         a = max(a, act * outline);
 
+        // The eyebrows: not a muscle but hair on the brow ridge, drawn as a soft arched band of short
+        // slanted strokes. They sit on the skin (the chart of the resting face), so they rise with it.
+        {
+          float bs = abs(cp.x);
+          float bt = (bs - 0.011) / 0.047;
+          float centre = 1.6135 + 0.0075 * sin(3.14159 * clamp(bt, 0.0, 1.0) * 0.8) - 0.003 * bt;
+          float bh = mix(0.0042, 0.0018, clamp(bt, 0.0, 1.0));
+          float dy = abs(cp.y - centre);
+          float bw = fwidth(cp.y);
+          float band = (1.0 - smoothstep(bh - bw, bh + bw, dy)) * smoothstep(-0.05, 0.08, bt) * (1.0 - smoothstep(0.92, 1.0, bt));
+          float hair = 0.65 + 0.35 * smoothstep(0.3, 0.7, abs(fract((bs * 0.85 + (cp.y - centre) * 0.45) * 1600.0) - 0.5) * 2.0);
+          float brow = band * hair;
+          col = mix(col, ${dark ? 'mix(uRim, vec3(1.0), 0.35)' : 'cLine'}, brow * ${dark ? '1.0' : '0.6'});
+          a = max(a, brow * ${dark ? '0.95' : '0.9'});
+        }
+
         // The outline of the head and body, as on the rest of the figure.
         col = mix(col, uRim, fr * 0.8);
         a = max(a, fr * ${dark ? '0.85' : '0.8'});
@@ -563,16 +579,30 @@ export function faceMuscleRig(activation: { value: Float32Array }, meshes: THREE
     for (const name of Object.keys(area.moves ?? {})) v = Math.max(v, values.get(`${area.id}.${name}`) ?? 0)
     activation.value[area.index] = v
   }
+  const follows = new Map<string, number>()
+  const shape = (id: string) => {
+    const amount = Math.min((values.get(id) ?? 0) + (follows.get(id) ?? 0), 1)
+    for (const mesh of meshes) {
+      const k = mesh.morphTargetDictionary?.[id]
+      if (k !== undefined && mesh.morphTargetInfluences) mesh.morphTargetInfluences[k] = amount * gain
+    }
+  }
   return {
     set(id: string, amount: number) {
       const area = byId.get(id.split('.')[0])
       if (!area) return
       values.set(id, amount)
       light(area)
-      for (const mesh of meshes) {
-        const k = mesh.morphTargetDictionary?.[id]
-        if (k !== undefined && mesh.morphTargetInfluences) mesh.morphTargetInfluences[k] = amount * gain
-      }
+      shape(id)
+    },
+    /**
+     * Moves an area along with another one without lighting it (the skin around a working muscle is
+     * pulled a little too): adds to its own amount from `set`.
+     */
+    follow(id: string, amount: number) {
+      if (!byId.has(id.split('.')[0])) return
+      follows.set(id, amount)
+      shape(id)
     },
     get(id: string) {
       return values.get(id) ?? 0

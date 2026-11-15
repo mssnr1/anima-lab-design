@@ -100,7 +100,7 @@ export function stripeMaterial(o: StripeOptions): THREE.Material {
         `#include <project_vertex>
         vRest = (modelMatrix * vec4(${o.rest ? 'rest' : 'position'}, 1.0)).xyz;
         ${o.rest ? '// The colour goes by where the skin is now (a hand raised to the face takes the face\'s colour); the lines by where it rests.\n        vHeight = (modelMatrix * vec4(position, 1.0)).y;' : ''}
-        ${o.limb ? 'vAxis = (modelMatrix * vec4(axis.x, position.y, axis.y, 1.0)).xz;' : ''}
+        ${o.limb ? `vAxis = (modelMatrix * vec4(axis.x, ${o.rest ? 'rest' : 'position'}.y, axis.y, 1.0)).xz;` : ''}
         // The normal follows the morph targets too (e.g. the calm face), so the rim and line strength follow the shape.
         vec3 shapedNormal = normal;
         #ifdef USE_MORPHNORMALS
@@ -287,6 +287,8 @@ export function makeStripeMaterials(p: StripePalette, dark: boolean, level: { va
     skin: stripeMaterial(skinLines),
     // The same skin for a posed mesh (see `armRig`): the lines keep to the skin as the limb moves.
     posedSkin: stripeMaterial({ ...skinLines, rest: true }),
+    // Posed arms: rings round each arm and finger, even like the body's lines, staying on the skin as it moves.
+    posedLimbs: stripeMaterial({ ...skinLines, pattern: 'level', density: 260, rest: true }),
     // Arms: the same lines, running round each arm (an arm is about a third of the trunk's girth). The legs
     // take the trunk's own lines, so they run on from the belly without a seam.
     limbs: stripeMaterial({ ...skinLines, limb: true, density: 44 }),
