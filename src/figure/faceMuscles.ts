@@ -411,12 +411,16 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
 
         // Each area has its own outline a hair inside its border, rounded at the corners; between two
         // outlines runs a narrow seam of plain fill. The rest of head and body has no outline of its own.
+        // Widths never fall below a pixel or so: where the skin is drawn together (a lifting forehead) the
+        // outline and the seam keep the same look on screen instead of thinning out and breaking up.
         float gw = fwidth(depth);
-        float outline = 1.0 - smoothstep(${f(OUTLINE_W)} - gw, ${f(OUTLINE_W)} + gw, abs(depth - ${f(INSET)}));
-        float gutter = 1.0 - smoothstep(${f(INSET)} - gw, ${f(INSET)} + gw, depth);
+        float inset = max(${f(INSET)}, min(1.6 * gw, 0.002));
+        float ow = max(${f(OUTLINE_W)}, min(0.6 * gw, 0.0008));
+        float outline = 1.0 - smoothstep(ow - gw, ow + gw, abs(depth - inset));
+        float gutter = 1.0 - smoothstep(inset - gw, inset + gw, depth);
         if (plain) { outline = 0.0; gutter = seam ? gutter : 0.0; }
         // Seen edge-on an outline would smear into a band: there it fades, the silhouette takes over.
-        outline *= 1.0 - smoothstep(0.0012, 0.003, gw);
+        outline *= smoothstep(0.08, 0.22, abs(dot(normalize(vN), normalize(vView))));
         line *= 1.0 - gutter;
 
         // By day as at night a soft rim that runs a good way into the figure (no drawn outline).
@@ -502,8 +506,8 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
   const scale = new THREE.Vector3().setFromMatrixScale(matrix).x
   const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix)
   const moving = FACE_AREAS.flatMap((a) => [
-    ...(a.motion ? [{ index: a.index, id: a.id, motion: a.motion }] : []),
-    ...Object.entries(a.moves ?? {}).map(([name, motion]) => ({ index: a.index, id: `${a.id}.${name}`, motion })),
+    ...(a.motion ? [{ index: a.index, id: a.id, side: a.side, motion: a.motion }] : []),
+    ...Object.entries(a.moves ?? {}).map(([name, motion]) => ({ index: a.index, id: `${a.id}.${name}`, side: a.side, motion })),
   ])
   const deltas = moving.map(() => new Float32Array(n * 3))
   const w = new THREE.Vector3()
@@ -549,7 +553,13 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
     // Each area moves fully up to its border (where it is the nearest) and carries the skin beyond it
     // along, fading with the distance past the border (half the difference of the two distances).
     moving.forEach((a, k) => {
-      const weight = Math.exp(-(((dist[a.index] - nearest) / 2 / PUSH) ** 2))
+      let weight = Math.exp(-(((dist[a.index] - nearest) / 2 / PUSH) ** 2))
+      // A paired area carries only the skin of its own side; on the midline both twins share it, so
+      // the skin between two working areas (e.g. above the nose) is not pushed twice as far.
+      if (a.side !== 'mid' && a.index !== nearestOf[i]) {
+        const t = Math.min(Math.max(((a.side === 'left' ? 1 : -1) * w.x + 0.008) / 0.016, 0), 1)
+        weight *= t * t * (3 - 2 * t)
+      }
       if (weight < 1e-3) return
       motionAt(a.motion, w, nw, move)
       if (a.index !== nearestOf[i]) move.clampLength(0, most[k])
