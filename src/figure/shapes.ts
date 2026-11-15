@@ -62,7 +62,17 @@ export function muscleHead(head: THREE.Mesh): THREE.BufferGeometry {
   let made = source.userData.muscles as THREE.BufferGeometry | undefined
   if (!made) {
     head.updateWorldMatrix(true, false)
-    made = subdivided(closedHead(head))
+    // Four times as fine, and once more where the face moves most (round the brows and eyes), so the
+    // borders of the areas stay smooth while the skin is squeezed or stretched there.
+    const m = head.matrixWorld
+    const wa = new THREE.Vector3()
+    const wb = new THREE.Vector3()
+    made = subdivided(subdivided(closedHead(head)), (a, b) => {
+      wa.copy(a).applyMatrix4(m)
+      wb.copy(b).applyMatrix4(m)
+      const y = (wa.y + wb.y) / 2
+      return wa.z > 0.02 && wb.z > 0.02 && y > 1.57 && y < 1.69 && Math.abs(wa.x + wb.x) < 0.14 && wa.distanceTo(wb) > 0.003
+    })
     addMuscleMorphs(made, head.matrixWorld)
     source.userData.muscles = made
   }

@@ -85,12 +85,12 @@ const MOUTH_Y = 1.515
 const EARS: Core[] = [-1, 1].map((side) => ({ kind: 'ellipse', c: [side * 0.132, 1.585], r: [0.011, 0.022] }))
 
 const DEFS: AreaDef[] = [
-  { muscle: 'frontalis', label: 'Stirn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.662], r: [0.064, 0.03] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'stretch', c: [0, 1.7, 0.07], axis: [0, 1, 0], amount: -0.075 } },
+  { muscle: 'frontalis', label: 'Stirn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.662], r: [0.064, 0.03] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'stretch', c: [0, 1.7, 0.07], axis: [0, 1, 0], amount: -0.04 } },
   { muscle: 'corrugator', label: 'Zornesfalte', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.614], r: [0.008, 0.012] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, -0.8, -0.2], amount: 0.0025 } },
   { muscle: 'nasalis', label: 'Nase', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.566], r: [0.009, 0.026] }], fibre: { kind: 'along', angle: 0 }, motion: { kind: 'shift', dir: [0, 1, 0], amount: 0.0015 } },
   { muscle: 'orbicularisOris', label: 'Mund', side: 'mid', cores: [{ kind: 'ellipse', c: [0, MOUTH_Y + 0.001], r: [0.03, 0.019] }], fibre: { kind: 'rings', c: [0, MOUTH_Y], r: [1.6, 1] }, motion: { kind: 'toward', to: [0, MOUTH_Y, 0.075], amount: 0.2, shift: [0, 0, 0.0035] } },
   { muscle: 'mentalis', label: 'Kinn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.483], r: [0.017, 0.011] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, 0.5, 1], amount: 0.0028 } },
-  { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.3 } } },
+  { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }, { kind: 'capsule', a: [0.019, 1.611], b: [0.043, 1.613], r: 0.008 }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.22 } } },
   { muscle: 'levatorLabii', label: 'Oberlippe', side: 'pair', cores: [{ kind: 'capsule', a: [0.02, 1.568], b: [0.021, 1.544], r: 0.0065 }], fibre: { kind: 'along', angle: 84 }, motion: { kind: 'shift', dir: [0.1, 1, 0.2], amount: 0.0022 } },
   { muscle: 'zygomaticus', label: 'Jochbein', side: 'pair', cores: [{ kind: 'capsule', a: [0.066, 1.566], b: [0.036, 1.532], r: 0.009 }], fibre: { kind: 'along', angle: 49 }, motion: { kind: 'toward', to: [0.06, 1.57, 0.05], amount: 0.16 } },
   { muscle: 'buccinator', label: 'Wange', side: 'pair', cores: [{ kind: 'ellipse', c: [0.064, 1.517], r: [0.013, 0.015] }], fibre: { kind: 'along', angle: 6 }, motion: { kind: 'swell', amount: -0.0015 } },
@@ -414,8 +414,11 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
         // Widths never fall below a pixel or so: where the skin is drawn together (a lifting forehead) the
         // outline and the seam keep the same look on screen instead of thinning out and breaking up.
         float gw = fwidth(depth);
-        float inset = max(${f(INSET)}, min(1.6 * gw, 0.002));
-        float ow = max(${f(OUTLINE_W)}, min(0.6 * gw, 0.0008));
+        // The size of a pixel on the figure, smooth across the mesh (fwidth(depth) jumps from one triangle to
+        // the next where the skin is squeezed, and the outline would step with it).
+        float px = length(vView) * length(fwidth(normalize(vView)));
+        float inset = max(${f(INSET)}, min(1.6 * px, 0.002));
+        float ow = max(${f(OUTLINE_W)}, min(0.6 * px, 0.0008));
         float outline = 1.0 - smoothstep(ow - gw, ow + gw, abs(depth - inset));
         float gutter = 1.0 - smoothstep(inset - gw, inset + gw, depth);
         if (plain) { outline = 0.0; gutter = seam ? gutter : 0.0; }

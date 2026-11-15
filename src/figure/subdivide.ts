@@ -8,7 +8,7 @@ import * as THREE from 'three'
  *
  * Returns a new geometry; the first vertices keep their ids and positions.
  */
-export function subdivided(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+export function subdivided(geometry: THREE.BufferGeometry, split?: (a: THREE.Vector3, b: THREE.Vector3) => boolean): THREE.BufferGeometry {
   const index = geometry.index
   const pos = geometry.attributes.position
   if (!index || !pos) return geometry.clone()
@@ -49,14 +49,31 @@ export function subdivided(geometry: THREE.BufferGeometry): THREE.BufferGeometry
     return id
   }
   const out: number[] = []
+  const pa = new THREE.Vector3()
+  const pb = new THREE.Vector3()
+  const marked = (a: number, b: number) => !split || split(pa.fromArray(P, a * 3), pb.fromArray(P, b * 3))
   for (let t = 0; t < index.count; t += 3) {
-    const a = index.getX(t)
-    const b = index.getX(t + 1)
-    const c = index.getX(t + 2)
-    const ab2 = mid(a, b)
-    const bc = mid(b, c)
-    const ca = mid(c, a)
-    out.push(a, ab2, ca, ab2, b, bc, ca, bc, c, ab2, bc, ca)
+    const v = [index.getX(t), index.getX(t + 1), index.getX(t + 2)]
+    // Only the marked edges are split; a triangle with one or two of them is cut so it still meets its
+    // neighbours edge to edge (no cracks).
+    const m = [0, 1, 2].map((k) => (marked(v[k], v[(k + 1) % 3]) ? mid(v[k], v[(k + 1) % 3]) : -1))
+    const count = m.filter((x) => x >= 0).length
+    if (count === 3) {
+      out.push(v[0], m[0], m[2], m[0], v[1], m[1], m[2], m[1], v[2], m[0], m[1], m[2])
+    } else if (count === 0) {
+      out.push(v[0], v[1], v[2])
+    } else if (count === 1) {
+      const k = m.findIndex((x) => x >= 0)
+      const [a, b, c] = [v[k], v[(k + 1) % 3], v[(k + 2) % 3]]
+      out.push(a, m[k], c, m[k], b, c)
+    } else {
+      // The unmarked edge is k: corners a, b along it, c opposite; mbc on b-c, mca on c-a.
+      const k = m.findIndex((x) => x < 0)
+      const [a, b, c] = [v[k], v[(k + 1) % 3], v[(k + 2) % 3]]
+      const mbc = m[(k + 1) % 3]
+      const mca = m[(k + 2) % 3]
+      out.push(mca, mbc, c, a, b, mbc, a, mbc, mca)
+    }
   }
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3))
