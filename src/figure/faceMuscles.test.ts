@@ -121,3 +121,33 @@ describe('subdivision', () => {
     expect(worst).toBeLessThan(flatWorst * 0.5)
   })
 })
+
+describe('further movements', () => {
+  it('opens the eyes as their own morph and lights the eye area', () => {
+    const { geometry, matrix } = headSphere()
+    const names = addMuscleMorphs(geometry, matrix)
+    expect(names).toContain('orbicularisOculiLeft.open')
+    expect(names).toContain('orbicularisOculiRight.open')
+    const mesh = new THREE.Mesh(geometry)
+    const activation = faceActivation()
+    const rig = faceMuscleRig(activation, [mesh], 1.2)
+    rig.set('orbicularisOculiRight.open', 0.5)
+    const eye = FACE_AREAS.find((a) => a.id === 'orbicularisOculiRight')!
+    expect(activation.value[eye.index]).toBeCloseTo(0.5)
+    expect(mesh.morphTargetInfluences![mesh.morphTargetDictionary!['orbicularisOculiRight.open']]).toBeCloseTo(0.6)
+    // Above the eye the skin moves up, below it down.
+    const open = geometry.morphAttributes.position![mesh.morphTargetDictionary!['orbicularisOculiLeft.open']]
+    const pos = geometry.attributes.position
+    const w = new THREE.Vector3()
+    let up = 0
+    let down = 0
+    for (let i = 0; i < pos.count; i++) {
+      w.fromBufferAttribute(pos, i).applyMatrix4(matrix)
+      if (faceAreaAt(w.x, w.y, w.z).area.id !== 'orbicularisOculiLeft') continue
+      if (w.y > 1.6) up = Math.max(up, open.getY(i))
+      if (w.y < 1.575) down = Math.min(down, open.getY(i))
+    }
+    expect(up).toBeGreaterThan(0)
+    expect(down).toBeLessThan(0)
+  })
+})

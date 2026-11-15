@@ -45,6 +45,8 @@ export type Motion =
   | { kind: 'toward'; to: readonly [number, number, number]; amount: number; shift?: readonly [number, number, number] }
   /** Push out along the surface normal (negative: in). */
   | { kind: 'swell'; amount: number }
+  /** Stretch along an axis away from a world point (negative: draw together), by this fraction of the distance. */
+  | { kind: 'stretch'; c: readonly [number, number, number]; axis: readonly [number, number, number]; amount: number }
 
 type AreaDef = {
   muscle: string
@@ -57,6 +59,8 @@ type AreaDef = {
   /** Not a muscle area: the rest of the head and the body, drawn with the body's own lines and no border between them. */
   neutral?: boolean
   motion?: Motion
+  /** Further movements of the same area, each its own morph named `<id>.<name>` (e.g. the eye opening wide). */
+  moves?: Record<string, Motion>
 }
 
 /** Vertical axis the chart is measured round (world z, at x = 0) and the radius that turns its angle into metres. */
@@ -86,7 +90,7 @@ const DEFS: AreaDef[] = [
   { muscle: 'nasalis', label: 'Nase', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.566], r: [0.009, 0.026] }], fibre: { kind: 'along', angle: 0 }, motion: { kind: 'shift', dir: [0, 1, 0], amount: 0.0015 } },
   { muscle: 'orbicularisOris', label: 'Mund', side: 'mid', cores: [{ kind: 'ellipse', c: [0, MOUTH_Y + 0.001], r: [0.03, 0.019] }], fibre: { kind: 'rings', c: [0, MOUTH_Y], r: [1.6, 1] }, motion: { kind: 'toward', to: [0, MOUTH_Y, 0.075], amount: 0.2, shift: [0, 0, 0.0035] } },
   { muscle: 'mentalis', label: 'Kinn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.483], r: [0.017, 0.011] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, 0.5, 1], amount: 0.0028 } },
-  { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 } },
+  { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.4 } } },
   { muscle: 'levatorLabii', label: 'Oberlippe', side: 'pair', cores: [{ kind: 'capsule', a: [0.02, 1.568], b: [0.021, 1.544], r: 0.0065 }], fibre: { kind: 'along', angle: 84 }, motion: { kind: 'shift', dir: [0.1, 1, 0.2], amount: 0.0022 } },
   { muscle: 'zygomaticus', label: 'Jochbein', side: 'pair', cores: [{ kind: 'capsule', a: [0.066, 1.566], b: [0.036, 1.532], r: 0.009 }], fibre: { kind: 'along', angle: 49 }, motion: { kind: 'toward', to: [0.06, 1.57, 0.05], amount: 0.16 } },
   { muscle: 'buccinator', label: 'Wange', side: 'pair', cores: [{ kind: 'ellipse', c: [0.064, 1.517], r: [0.013, 0.015] }], fibre: { kind: 'along', angle: 6 }, motion: { kind: 'swell', amount: -0.0015 } },
@@ -100,7 +104,7 @@ const DEFS: AreaDef[] = [
 ]
 
 /** One area of the map: a muscle (on one side, for the paired ones) with its own index into the activation array. */
-export type FaceArea = { id: string; index: number; weight: number; muscle: string; label: string; side: 'mid' | 'left' | 'right'; neutral: boolean; cores: Core[]; fibre: Fibre; motion?: Motion }
+export type FaceArea = { id: string; index: number; weight: number; muscle: string; label: string; side: 'mid' | 'left' | 'right'; neutral: boolean; cores: Core[]; fibre: Fibre; motion?: Motion; moves?: Record<string, Motion> }
 
 const mirrorV2 = (p: V2): V2 => [-p[0], p[1]]
 const mirrorCore = (c: Core): Core => {
@@ -127,6 +131,7 @@ const mirrorFibre = (f: Fibre): Fibre => {
 }
 const mirrorMotion = (m?: Motion): Motion | undefined => {
   if (!m || m.kind === 'swell') return m
+  if (m.kind === 'stretch') return { ...m, c: [-m.c[0], m.c[1], m.c[2]], axis: [-m.axis[0], m.axis[1], m.axis[2]] }
   if (m.kind === 'shift') return { ...m, dir: [-m.dir[0], m.dir[1], m.dir[2]] }
   return { ...m, to: [-m.to[0], m.to[1], m.to[2]], shift: m.shift ? [-m.shift[0], m.shift[1], m.shift[2]] : undefined }
 }
@@ -137,10 +142,11 @@ const mirrorMotion = (m?: Motion): Motion | undefined => {
  */
 export const FACE_AREAS: readonly FaceArea[] = DEFS.flatMap((d): Omit<FaceArea, 'index' | 'weight'>[] => {
   const base = { muscle: d.muscle, label: d.label, neutral: !!d.neutral }
-  if (d.side === 'mid') return [{ ...base, id: d.muscle, side: 'mid', cores: d.cores, fibre: d.fibre, motion: d.motion }]
+  if (d.side === 'mid') return [{ ...base, id: d.muscle, side: 'mid', cores: d.cores, fibre: d.fibre, motion: d.motion, moves: d.moves }]
+  const mirroredMoves = d.moves && Object.fromEntries(Object.entries(d.moves).map(([k, m]) => [k, mirrorMotion(m)!]))
   return [
-    { ...base, id: `${d.muscle}Left`, side: 'left', cores: d.cores, fibre: d.fibre, motion: d.motion },
-    { ...base, id: `${d.muscle}Right`, side: 'right', cores: d.cores.map(mirrorCore), fibre: mirrorFibre(d.fibre), motion: mirrorMotion(d.motion) },
+    { ...base, id: `${d.muscle}Left`, side: 'left', cores: d.cores, fibre: d.fibre, motion: d.motion, moves: d.moves },
+    { ...base, id: `${d.muscle}Right`, side: 'right', cores: d.cores.map(mirrorCore), fibre: mirrorFibre(d.fibre), motion: mirrorMotion(d.motion), moves: mirroredMoves },
   ]
 }).map((a, index) => ({ ...a, index, weight: areaWeight(a.cores, a.neutral) }))
 
@@ -148,6 +154,9 @@ export type FaceAreaId = string
 
 /** The ids of the muscle areas (without the neutral rest of head and body), in index order. */
 export const FACE_MUSCLES: readonly string[] = FACE_AREAS.filter((a) => !a.neutral).map((a) => a.id)
+
+/** Every id `faceMuscleRig().set` takes: the muscle areas and their further movements (`<id>.<name>`). */
+export const FACE_MOVES: readonly string[] = FACE_AREAS.filter((a) => !a.neutral).flatMap((a) => [a.id, ...Object.keys(a.moves ?? {}).map((m) => `${a.id}.${m}`)])
 
 /** A world point on the head chart: [s, y] (see above). */
 export function faceChart(x: number, y: number, z: number): [number, number] {
@@ -471,7 +480,10 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
   const n = pos.count
   const scale = new THREE.Vector3().setFromMatrixScale(matrix).x
   const normalMatrix = new THREE.Matrix3().getNormalMatrix(matrix)
-  const moving = FACE_AREAS.filter((a) => a.motion)
+  const moving = FACE_AREAS.flatMap((a) => [
+    ...(a.motion ? [{ index: a.index, id: a.id, motion: a.motion }] : []),
+    ...Object.entries(a.moves ?? {}).map(([name, motion]) => ({ index: a.index, id: `${a.id}.${name}`, motion })),
+  ])
   const deltas = moving.map(() => new Float32Array(n * 3))
   const w = new THREE.Vector3()
   const nw = new THREE.Vector3()
@@ -488,10 +500,13 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
     moving.forEach((a, k) => {
       const weight = share[a.index] / total
       if (weight < 1e-3) return
-      const mo = a.motion!
+      const mo = a.motion
       if (mo.kind === 'shift') move.set(...mo.dir).normalize().multiplyScalar(mo.amount)
       else if (mo.kind === 'swell') move.copy(nw).multiplyScalar(mo.amount)
-      else {
+      else if (mo.kind === 'stretch') {
+        move.set(...mo.axis).normalize()
+        move.multiplyScalar(move.dot(new THREE.Vector3(...mo.c).sub(w).negate()) * mo.amount)
+      } else {
         move.set(...mo.to).sub(w).multiplyScalar(mo.amount)
         if (mo.shift) move.add(new THREE.Vector3(...mo.shift))
       }
@@ -533,26 +548,34 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
 }
 
 /**
- * Drives the face: `set(id, amount)` lights an area and moves it (0 = at rest, 1 = fully working).
+ * Drives the face: `set(id, amount)` lights an area and moves it (0 = at rest, 1 = fully working); an id
+ * like `orbicularisOculiLeft.open` runs one of the area's further movements and lights the area too.
  * `meshes` are the meshes drawn with the face material and the muscle morphs (the head; its depth
- * pre-pass copy too, so the depth follows the shape).
+ * pre-pass copy too, so the depth follows the shape). `gain` exaggerates every movement (1 = as modelled),
+ * so an exercise reads clearly on a phone.
  */
-export function faceMuscleRig(activation: { value: Float32Array }, meshes: THREE.Mesh[], motion = 1) {
+export function faceMuscleRig(activation: { value: Float32Array }, meshes: THREE.Mesh[], gain = 1) {
   for (const mesh of meshes) mesh.updateMorphTargets()
   const byId = new Map(FACE_AREAS.map((a) => [a.id, a]))
+  const values = new Map<string, number>()
+  const light = (area: FaceArea) => {
+    let v = values.get(area.id) ?? 0
+    for (const name of Object.keys(area.moves ?? {})) v = Math.max(v, values.get(`${area.id}.${name}`) ?? 0)
+    activation.value[area.index] = v
+  }
   return {
     set(id: string, amount: number) {
-      const area = byId.get(id)
+      const area = byId.get(id.split('.')[0])
       if (!area) return
-      activation.value[area.index] = amount
+      values.set(id, amount)
+      light(area)
       for (const mesh of meshes) {
         const k = mesh.morphTargetDictionary?.[id]
-        if (k !== undefined && mesh.morphTargetInfluences) mesh.morphTargetInfluences[k] = amount * motion
+        if (k !== undefined && mesh.morphTargetInfluences) mesh.morphTargetInfluences[k] = amount * gain
       }
     },
     get(id: string) {
-      const area = byId.get(id)
-      return area ? activation.value[area.index] : 0
+      return values.get(id) ?? 0
     },
   }
 }
