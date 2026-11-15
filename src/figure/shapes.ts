@@ -72,7 +72,7 @@ export function muscleHead(head: THREE.Mesh): THREE.BufferGeometry {
       wb.copy(b).applyMatrix4(m)
       const y = (wa.y + wb.y) / 2
       const brows = y > 1.57 && y < 1.69 && Math.abs(wa.x + wb.x) < 0.14
-      const mouth = y > 1.49 && y < 1.54 && Math.abs(wa.x + wb.x) < 0.08
+      const mouth = y > 1.5 && y < 1.555 && Math.abs(wa.x + wb.x) < 0.08
       return wa.z > 0.02 && wb.z > 0.02 && (brows || mouth) && wa.distanceTo(wb) > 0.003
     })
     addMuscleMorphs(made, head.matrixWorld)

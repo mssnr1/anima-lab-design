@@ -80,7 +80,8 @@ export const FIBRE_SPACING = 0.0026
 
 // The landmarks of the model's face (world metres), found from its openings: eyes, brows, mouth, nose, ears.
 const EYE: V2 = [0.0316, 1.591]
-const MOUTH_Y = 1.515
+// The lips' seam (see `MOUTH` in face.ts): the mouth ring is centred on it, a little more of it on the lower lip.
+const MOUTH_Y = 1.53
 /** The ears belong to the plain rest of the head. */
 const EARS: Core[] = [-1, 1].map((side) => ({ kind: 'ellipse', c: [side * 0.132, 1.585], r: [0.011, 0.022] }))
 
@@ -88,7 +89,7 @@ const DEFS: AreaDef[] = [
   { muscle: 'frontalis', label: 'Stirn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.662], r: [0.064, 0.03] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'stretch', c: [0, 1.7, 0.07], axis: [0, 1, 0], amount: -0.04 } },
   { muscle: 'corrugator', label: 'Zornesfalte', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.614], r: [0.008, 0.012] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, -0.8, -0.2], amount: 0.0025 } },
   { muscle: 'nasalis', label: 'Nase', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.566], r: [0.009, 0.026] }], fibre: { kind: 'along', angle: 0 }, motion: { kind: 'shift', dir: [0, 1, 0], amount: 0.0015 } },
-  { muscle: 'orbicularisOris', label: 'Mund', side: 'mid', cores: [{ kind: 'ellipse', c: [0, MOUTH_Y + 0.001], r: [0.03, 0.019] }], fibre: { kind: 'rings', c: [0, MOUTH_Y], r: [1.6, 1] }, motion: { kind: 'toward', to: [0, MOUTH_Y, 0.075], amount: 0.2, shift: [0, 0, 0.0035] } },
+  { muscle: 'orbicularisOris', label: 'Mund', side: 'mid', cores: [{ kind: 'ellipse', c: [0, MOUTH_Y - 0.005], r: [0.03, 0.019] }], fibre: { kind: 'rings', c: [0, MOUTH_Y], r: [1.6, 1] }, motion: { kind: 'toward', to: [0, MOUTH_Y, 0.075], amount: 0.2, shift: [0, 0, 0.0035] } },
   { muscle: 'mentalis', label: 'Kinn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.483], r: [0.017, 0.011] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, 0.5, 1], amount: 0.0028 } },
   { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }, { kind: 'capsule', a: [0.019, 1.61], b: [0.042, 1.6], r: 0.0085 }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.22 } } },
   { muscle: 'levatorLabii', label: 'Oberlippe', side: 'pair', cores: [{ kind: 'capsule', a: [0.02, 1.568], b: [0.021, 1.544], r: 0.0065 }], fibre: { kind: 'along', angle: 84 }, motion: { kind: 'shift', dir: [0.1, 1, 0.2], amount: 0.0022 }, moves: { down: { kind: 'shift', dir: [0, -1, -0.15], amount: 0.003 } } },
@@ -379,10 +380,15 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
       uOutline: o.outline ?? { value: 1 },
       uShow: o.show ?? { value: 1 },
     })
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float mouthGap;\nvarying float vMouth;\nvarying vec3 vRest;\nvarying vec3 vN;\nvarying vec3 vView;').replace(
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float mouthGap;\nvarying float vMouth;\nvarying vec3 vRest;\nvarying float vOpen;\nvarying vec3 vN;\nvarying vec3 vView;').replace(
       '#include <project_vertex>',
       `#include <project_vertex>
       vRest = (modelMatrix * vec4(position, 1.0)).xyz;
+      // How far the mouth is open: addJawMorph adds its morph after all others, so it is the last one.
+      vOpen = 0.0;
+      #ifdef USE_MORPHTARGETS
+      vOpen = morphTargetInfluences[MORPHTARGETS_COUNT - 1];
+      #endif
       vMouth = mouthGap;
       vec3 shapedNormal = normal;
       #ifdef USE_MORPHNORMALS
@@ -398,7 +404,7 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
       .replace(
         '#include <common>',
         `#include <common>
-        varying vec3 vRest; varying vec3 vN; varying vec3 vView; varying float vMouth;
+        varying vec3 vRest; varying float vOpen; varying vec3 vN; varying vec3 vView; varying float vMouth;
         uniform vec3 uLine; uniform vec3 uBase; uniform vec3 uRim; uniform vec3 uLow; uniform vec3 uLight; uniform vec3 uLight2;
         uniform float uAct[${FACE_AREAS.length}]; uniform float uOutline; uniform float uShow;
         ${FACE_AREA_GLSL}`,
@@ -439,6 +445,8 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
 
         // By day as at night a soft rim that runs a good way into the figure (no drawn outline).
         float fr = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), ${dark ? '1.5' : '1.6'});
+        // The lips' seam folds in sharply: no rim light there, or it shows as a bright notch.
+        fr *= 1.0 - smoothstep(0.2, 0.6, vMouth);
         if (plain) line *= mix(0.3, 1.0, smoothstep(0.05, 0.5, fr));
 
         // How much this area works.
@@ -484,13 +492,18 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
           a = max(a, brow * ${dark ? '0.7' : '0.6'});
         }
 
-        // The gap between the lips (see addJawMorph; 0 on heads without it): a dark opening when the mouth
-        // opens, a fine line along the seam when it is closed.
+        // The lips (see addJawMorph; 0 on heads without it). The seam is drawn as a fine line, about a pixel
+        // wide whatever the mesh; only where the skin across it is pulled apart (the mouth opens) does the
+        // band round it turn into a dark opening.
         {
-          float gap = smoothstep(0.12, 0.5, vMouth);
+          float open = smoothstep(0.03, 0.25, vOpen);
+          float gap = smoothstep(0.12, 0.5, vMouth) * open;
           col = mix(col, ${dark ? 'vec3(0.0)' : 'mix(cLine, uRim, 0.35)'}, gap);
           a = mix(a, ${dark ? '0.0' : '0.6'}, gap);
-          ${dark ? 'float lip = smoothstep(0.04, 0.12, vMouth) * (1.0 - smoothstep(0.12, 0.3, vMouth)); col = mix(col, uRim, lip * 0.7); a = max(a, lip * 0.7);' : ''}
+          float d = (1.0 - vMouth) / max(fwidth(vMouth), 1e-5);
+          float lip = (1.0 - smoothstep(0.6, 1.6, d)) * step(0.05, vMouth) * (1.0 - open);
+          col = mix(col, uRim, lip * 0.6);
+          a = max(a, lip * ${dark ? '0.6' : '0.5'});
         }
 
         // The outline of the head and body, as on the rest of the figure.
@@ -499,7 +512,7 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
         ${dark ? 'gl_FragColor = vec4(col * min(a * uShow, 1.0), 1.0);' : 'gl_FragColor = vec4(col, min(a * uShow, 1.0));'}`,
       )
   }
-  m.customProgramCacheKey = () => `face-muscles-mouth-${dark ? 'dark' : 'light'}-${FACE_AREAS.length}`
+  m.customProgramCacheKey = () => `face-muscles-lips-${dark ? 'dark' : 'light'}-${FACE_AREAS.length}`
   return m
 }
 

@@ -2,6 +2,8 @@ import * as THREE from 'three'
 
 /** The mouth: where the lips meet (world metres) and the half size of the slit between them. */
 export const LIPS = { y: 1.515, z: 0.08, halfWidth: 0.022, halfHeight: 0.007 }
+/** Where the head's lips meet (the seam between them, measured on the model): the mouth opens here. */
+export const MOUTH = { y: 1.53, z: 0.09 }
 
 type Hole = { verts: number[]; center: THREE.Vector3; normal: THREE.Vector3; radius: number; aspect: number; length: number }
 
@@ -80,21 +82,21 @@ export function addCalmMorph(geometry: THREE.BufferGeometry, matrix: THREE.Matri
     }
   }
 
-  // The smile: a soft groove along a curve through the lips whose ends rise, plus the corners lifting a
+  // The smile: a soft groove along the lips' seam whose ends rise, plus the corners lifting a
   // little and the cheeks rounding. Where the skin turns into the groove the lines darken (they are
   // drawn stronger where the surface turns away), so the smile shows in the lines themselves.
   const SMILE_HALF = LIPS.halfWidth * 1.35
-  const smileY = (x: number) => LIPS.y - 0.0025 + 0.009 * (x / SMILE_HALF) ** 2
+  const smileY = (x: number) => MOUTH.y + 0.007 * (x / SMILE_HALF) ** 2
   for (let i = 0; i < n; i++) {
     const p = world[i]
-    if (p.z < 0.04 || Math.abs(p.y - LIPS.y) > 0.045) continue
+    if (p.z < 0.04 || Math.abs(p.y - MOUTH.y) > 0.045) continue
     const along = 1 - smooth((Math.abs(p.x) - SMILE_HALF * 0.85) / (SMILE_HALF * 0.3))
     const groove = Math.exp(-(((p.y - smileY(p.x)) / 0.0032) ** 2)) * along
-    moved[i].z -= 0.005 * groove
+    moved[i].z -= 0.003 * groove
     for (const side of [-1, 1]) {
       const cx = side * (LIPS.halfWidth + 0.002)
-      const w = Math.exp(-(((p.x - cx) / 0.011) ** 2) - ((p.y - LIPS.y) / 0.011) ** 2)
-      const cheek = Math.exp(-(((p.x - side * 0.04) / 0.016) ** 2) - ((p.y - (LIPS.y + 0.022)) / 0.014) ** 2)
+      const w = Math.exp(-(((p.x - cx) / 0.011) ** 2) - ((p.y - MOUTH.y) / 0.011) ** 2)
+      const cheek = Math.exp(-(((p.x - side * 0.04) / 0.016) ** 2) - ((p.y - (MOUTH.y + 0.022)) / 0.014) ** 2)
       moved[i].y += 0.003 * w + 0.0015 * cheek
       moved[i].x += side * 0.0012 * w
       moved[i].z += 0.0025 * cheek
@@ -150,10 +152,10 @@ export function addJawMorph(geometry: THREE.BufferGeometry, matrix: THREE.Matrix
   const n = pos.count
   const world = Array.from({ length: n }, (_, i) => new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(matrix))
   // Where the lips meet: the head's lips are joined skin (only a small hole is left between them), so
-  // the mouth opens along their seam, at LIPS, a little higher at the corners as the lips curve.
+  // the mouth opens along their seam, at MOUTH, a hair higher at the corners as the lips curve.
   const hw = LIPS.halfWidth
-  const line = (x: number) => LIPS.y + 0.002 * (x / hw) ** 2
-  const lips = { at: new THREE.Vector3(0, LIPS.y, LIPS.z) }
+  const line = (x: number) => MOUTH.y + 0.001 * (x / hw) ** 2
+  const lips = { at: new THREE.Vector3(0, MOUTH.y, MOUTH.z) }
   const sides = new Float32Array(n)
   const weight = new Float32Array(n)
   for (let i = 0; i < n; i++) {
@@ -164,7 +166,9 @@ export function addJawMorph(geometry: THREE.BufferGeometry, matrix: THREE.Matrix
     const inMouth = Math.abs(p.x) < hw && p.z > lips.at.z - 0.02
     // The lips' seam is marked (1 on it, 0 a millimetre off and everywhere else): opened, the skin
     // stretched between the lips takes the mark and the shader draws it as the dark opening.
-    sides[i] = inMouth ? 1 - Math.abs(side) : 0
+    // Points on the seam itself (within a third of a millimetre) take the full mark, so the closed seam can be
+    // drawn as one even line.
+    sides[i] = inMouth ? 1 - Math.max(0, Math.min(1, (Math.abs(p.y - ly) - 0.0003) / 0.0025)) : 0
     // Upper lip stays, lower lip goes with the jaw, points between the lips half way; the gap is widest in
     // the middle and closes toward the corners, so the opening is round. Past them the skin stretches.
     const split = (1 - side) / 2
@@ -175,7 +179,7 @@ export function addJawMorph(geometry: THREE.BufferGeometry, matrix: THREE.Matrix
     w *= smooth((p.z + 0.02) / 0.05) * (1 - smooth((Math.abs(p.x) - 0.06) / 0.03)) * smooth((p.y - 1.4) / 0.05)
     weight[i] = w
   }
-  const pivot = new THREE.Vector3(0, LIPS.y + 0.05, -0.02)
+  const pivot = new THREE.Vector3(0, MOUTH.y + 0.035, -0.02)
   const q = new THREE.Quaternion()
   const inv = matrix.clone().invert()
   const local = new THREE.Vector3()
