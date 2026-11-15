@@ -70,7 +70,7 @@ export const CHART = { axisZ: -0.005, radius: 0.09 }
 const BOW = 0.6
 
 /** How round the corners are where three areas meet (chart metres). */
-const ROUND = 0.0042
+const ROUND = 0.0068
 /** Where an area's outline runs (inside its border) and its half width, chart metres. */
 const INSET = 0.0007
 const OUTLINE_W = 0.00028
