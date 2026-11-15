@@ -24,6 +24,8 @@ export type StripeOptions = {
   rimAlpha: number
   /** Lines stronger toward the silhouette, quieter across the middle of the body, so the outline carries the picture. */
   focusTrunk?: boolean
+  /** The pattern follows the geometry's `rest` attribute (its unposed position) instead of `position`, so the lines stay on the skin of a posed limb (see `armRig`). */
+  rest?: boolean
   /** 'around' lines run round each arm's own long axis (the geometry's `axis` attribute, see `addLimbAxis`) instead of the trunk's. */
   limb?: boolean
   /** Shared world height up to which the lines are lit (the breath filling up); lines above stay at `dimAlpha`. */
@@ -92,11 +94,12 @@ export function stripeMaterial(o: StripeOptions): THREE.Material {
       ...(o.edges ? { uEdgeMap: o.edges.map, uEdgeSize: o.edges.size, uEdgeR: o.edges.radius } : {}),
     })
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vRest;\nvarying vec3 vN;\nvarying vec3 vView;${o.limb ? '\nattribute vec2 axis;\nvarying vec2 vAxis;' : ''}`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vRest;\nvarying vec3 vN;\nvarying vec3 vView;${o.limb ? '\nattribute vec2 axis;\nvarying vec2 vAxis;' : ''}${o.rest ? '\nattribute vec3 rest;\nvarying float vHeight;' : ''}`)
       .replace(
         '#include <project_vertex>',
         `#include <project_vertex>
-        vRest = (modelMatrix * vec4(position, 1.0)).xyz;
+        vRest = (modelMatrix * vec4(${o.rest ? 'rest' : 'position'}, 1.0)).xyz;
+        ${o.rest ? '// The colour goes by where the skin is now (a hand raised to the face takes the face\'s colour); the lines by where it rests.\n        vHeight = (modelMatrix * vec4(position, 1.0)).y;' : ''}
         ${o.limb ? 'vAxis = (modelMatrix * vec4(axis.x, position.y, axis.y, 1.0)).xz;' : ''}
         // The normal follows the morph targets too (e.g. the calm face), so the rim and line strength follow the shape.
         vec3 shapedNormal = normal;
@@ -113,7 +116,7 @@ export function stripeMaterial(o: StripeOptions): THREE.Material {
       .replace(
         '#include <common>',
         `#include <common>
-        varying vec3 vRest; varying vec3 vN; varying vec3 vView;${o.limb ? ' varying vec2 vAxis;' : ''}
+        varying vec3 vRest; varying vec3 vN; varying vec3 vView;${o.limb ? ' varying vec2 vAxis;' : ''}${o.rest ? ' varying float vHeight;' : ''}
         uniform vec3 uLine; uniform vec3 uFill; uniform vec3 uRim;
         uniform float uDensity; uniform float uWidth; uniform float uLineA; uniform float uFillA; uniform float uRimA; uniform float uLevel; uniform float uDim; uniform float uShow;
         uniform vec3 uLow; uniform vec3 uLowFill; uniform vec2 uRange; uniform float uPulse; uniform vec3 uPulseC; uniform float uFillLit; uniform vec3 uDimC;
@@ -132,7 +135,7 @@ export function stripeMaterial(o: StripeOptions): THREE.Material {
         ${o.rimEdge ? `fr = smoothstep(${o.rimEdge[0].toFixed(3)}, ${o.rimEdge[1].toFixed(3)}, fr);` : ''}
         float focus = 1.0;
         ${o.focusTrunk ? 'line *= mix(0.3, 1.0, smoothstep(0.05, 0.5, fr));' : ''}
-        float low = 1.0 - smoothstep(uRange.x, uRange.y, vRest.y);
+        float low = 1.0 - smoothstep(uRange.x, uRange.y, ${o.rest ? 'vHeight' : 'vRest.y'});
         vec3 cLine = mix(uLine, uLow, low);
         vec3 cFill = mix(uFill, uLowFill, low * 0.8);
         vec3 cRim = ${o.rimPlain ? 'uRim' : 'mix(uRim, uLow, low * 0.7)'};
@@ -282,6 +285,8 @@ export function makeStripeMaterials(p: StripePalette, dark: boolean, level: { va
     // Trunk, neck and head: lines running down round the body's axis, so they go on from the trunk over the
     // neck and jaw onto the head without a step.
     skin: stripeMaterial(skinLines),
+    // The same skin for a posed mesh (see `armRig`): the lines keep to the skin as the limb moves.
+    posedSkin: stripeMaterial({ ...skinLines, rest: true }),
     // Arms: the same lines, running round each arm (an arm is about a third of the trunk's girth). The legs
     // take the trunk's own lines, so they run on from the belly without a seam.
     limbs: stripeMaterial({ ...skinLines, limb: true, density: 44 }),

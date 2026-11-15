@@ -18,3 +18,4 @@ export * from './heartbeat'
 
 /** The anatomy model, relative to the package root (import it with `?url` from `@anima-labs/design/models/atmen-anatomy.glb`). */
 export const MODEL_FILE = 'models/atmen-anatomy.glb'
+export * from './armRig'

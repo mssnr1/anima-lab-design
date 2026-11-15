@@ -224,3 +224,14 @@ arbeitender Bereich bekommt Faserlinien und eine zarte Fläche im Signaturlicht.
 `repetitions`, `outro`). Jeder Schritt sagt, wie stark welche Bereiche am Ende arbeiten, und `facePose(übung, ms)`
 liefert die Pose zu jedem Zeitpunkt (Werte direkt in `rig.set`). Die Übungen selbst gehören in die App (Fayo, eigenes Repo); ein Beispiel „Brauen-Lift“ für die Vorschau liegt in
 `preview/exercises.ts` (`?exercise=brow`, fester Zeitpunkt mit `&t=10000`).
+
+### Arme und Hände bewegen (`armRig`)
+
+Das Modell hat kein Skelett. `armRig(armsMesh)` macht die Arme trotzdem beweglich: Oberarm, Unterarm und
+Hand sind starre Teile, die an Schulter, Ellbogen und Handgelenk (`ARM_JOINTS`, am Modell gemessen) weich
+ineinander übergehen. Eine Pose (`ArmGoal`: Handgelenk, Fingerrichtung, Handfläche) gilt für den linken Arm
+und wird für den rechten gespiegelt; `pose(goal, 0..1)` fährt den Weg dorthin. Die Linien bleiben auf der
+Haut, wenn das Material `posedSkin` aus `makeStripeMaterials` ist (Muster nach Ruhelage, Farbe nach aktueller
+Höhe, damit eine erhobene Hand die Farbe des Gesichts trägt). Fayo zeigt so den Brauen-Lift mit den eigenen
+Zeigefingern unter den Brauen. Grenzen: die Finger bewegen sich nicht einzeln, und an der Schulter staucht
+sich der Oberarm bei weit erhobenem Arm (bei Kopf-Ausschnitt nicht im Bild).
