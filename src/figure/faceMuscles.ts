@@ -321,7 +321,7 @@ export type FacePalette = { body: string; bodyBase: string; bodyRim: string; bod
 
 /** Mimo's (Fayo's) proposed signature light (tokens/apps/mimo.css) on the shared figure colours. */
 export const FACE_PALETTES: Record<'light' | 'dark', FacePalette> = {
-  light: { body: '#1a1f33', bodyBase: '#fbfbf9', bodyRim: '#1a1f33', bodyLow: '#b4b8c6', light: '#c2457a', light2: '#c8692e' },
+  light: { body: '#1a1f33', bodyBase: '#fbfbf9', bodyRim: '#7d84a3', bodyLow: '#b4b8c6', light: '#00a88a', light2: '#2a7fd4' },
   dark: { body: '#8f86ff', bodyBase: '#0d1120', bodyRim: '#b9adff', bodyLow: '#4aa6d6', light: '#ffc2d6', light2: '#ffd8b0' },
 }
 
@@ -419,8 +419,8 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
         outline *= 1.0 - smoothstep(0.0012, 0.003, gw);
         line *= 1.0 - gutter;
 
-        float fr = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), ${dark ? '1.5' : '1.0'});
-        ${dark ? '' : 'fr = smoothstep(0.74, 0.86, fr);'}
+        // By day as at night a soft rim that runs a good way into the figure (no drawn outline).
+        float fr = pow(1.0 - abs(dot(normalize(vN), normalize(vView))), ${dark ? '1.5' : '1.6'});
         if (plain) line *= mix(0.3, 1.0, smoothstep(0.05, 0.5, fr));
 
         // How much this area works.
@@ -451,7 +451,7 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
 
         // The outline of the head and body, as on the rest of the figure.
         col = mix(col, uRim, fr * 0.8);
-        a = max(a, fr * ${dark ? '0.85' : '0.92'});
+        a = max(a, fr * ${dark ? '0.85' : '0.8'});
         ${dark ? 'gl_FragColor = vec4(col * min(a * uShow, 1.0), 1.0);' : 'gl_FragColor = vec4(col, min(a * uShow, 1.0));'}`,
       )
   }

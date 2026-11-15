@@ -248,7 +248,11 @@ export type Fade = { inner: { value: number }; skin: { value: number } }
 /** Heights (world metres) over which the skin turns from `bodyLow` (belly and below) to its own colour (chest and head). */
 const SKIN_GRADIENT = new THREE.Vector2(0.85, 1.45)
 
-export function makeStripeMaterials(p: StripePalette, dark: boolean, level: { value: number }, edges?: EdgeMap, fade?: Fade, lungRange?: { value: THREE.Vector2 }, lungPulse?: { value: number }) {
+/** `softRim`: by day too, the skin's outline is a soft rim running into the figure instead of a drawn ink line (Fayo). */
+export type StripeLook = { softRim?: boolean }
+
+export function makeStripeMaterials(p: StripePalette, dark: boolean, level: { value: number }, edges?: EdgeMap, fade?: Fade, lungRange?: { value: THREE.Vector2 }, lungPulse?: { value: number }, look?: StripeLook) {
+  const softRim = dark || !!look?.softRim
   const inner = fade?.inner
   // The skin shows only the surface the eye looks at (see `skinDepth`): its lines and rim over a fill in
   // nearly the page's colour, so no far wall, overlap or inner fold of the model shows through it.
@@ -262,10 +266,10 @@ export function makeStripeMaterials(p: StripePalette, dark: boolean, level: { va
     lineAlpha: dark ? 0.5 : 0.34,
     fillAlpha: dark ? 0.9 : 0.94,
     rim: p.bodyRim,
-    rimAlpha: dark ? 0.85 : 0.92,
-    rimPower: dark ? 1.5 : 1.0,
-    // By day the outline is a drawn line, not a glow.
-    rimEdge: dark ? undefined : [0.74, 0.86],
+    rimAlpha: dark ? 0.85 : softRim ? 0.8 : 0.92,
+    rimPower: dark ? 1.5 : softRim ? 1.6 : 1.0,
+    // By day the outline is a drawn line, not a glow (unless the app asks for the soft rim).
+    rimEdge: softRim ? undefined : [0.74, 0.86],
     focusTrunk: true,
     // Toward the belly only the lines and the outline change colour (by day they grow soft, at night they
     // turn to the sky's blue): the fill between them stays what it is at the chest, close to the page.
