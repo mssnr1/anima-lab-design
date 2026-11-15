@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { airwaySurface } from './airwayShape'
-import { addCalmMorph } from './face'
+import { addCalmMorph, addJawMorph } from './face'
 import { addMuscleMorphs } from './faceMuscles'
 import { withHolesFilled } from './holes'
 import { tidiedLegs } from './legShape'
@@ -62,7 +62,7 @@ export function muscleHead(head: THREE.Mesh): THREE.BufferGeometry {
   let made = source.userData.muscles as THREE.BufferGeometry | undefined
   if (!made) {
     head.updateWorldMatrix(true, false)
-    // Four times as fine, and once more where the face moves most (round the brows and eyes), so the
+    // Four times as fine, and once more where the face moves most (round the brows, eyes and mouth), so the
     // borders of the areas stay smooth while the skin is squeezed or stretched there.
     const m = head.matrixWorld
     const wa = new THREE.Vector3()
@@ -71,9 +71,13 @@ export function muscleHead(head: THREE.Mesh): THREE.BufferGeometry {
       wa.copy(a).applyMatrix4(m)
       wb.copy(b).applyMatrix4(m)
       const y = (wa.y + wb.y) / 2
-      return wa.z > 0.02 && wb.z > 0.02 && y > 1.57 && y < 1.69 && Math.abs(wa.x + wb.x) < 0.14 && wa.distanceTo(wb) > 0.003
+      const brows = y > 1.57 && y < 1.69 && Math.abs(wa.x + wb.x) < 0.14
+      const mouth = y > 1.49 && y < 1.54 && Math.abs(wa.x + wb.x) < 0.08
+      return wa.z > 0.02 && wb.z > 0.02 && (brows || mouth) && wa.distanceTo(wb) > 0.003
     })
     addMuscleMorphs(made, head.matrixWorld)
+    // The mouth can open (`jaw`), and the face shader draws the gap between the lips.
+    addJawMorph(made, head.matrixWorld)
     source.userData.muscles = made
   }
   return made

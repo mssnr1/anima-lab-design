@@ -91,8 +91,8 @@ const DEFS: AreaDef[] = [
   { muscle: 'orbicularisOris', label: 'Mund', side: 'mid', cores: [{ kind: 'ellipse', c: [0, MOUTH_Y + 0.001], r: [0.03, 0.019] }], fibre: { kind: 'rings', c: [0, MOUTH_Y], r: [1.6, 1] }, motion: { kind: 'toward', to: [0, MOUTH_Y, 0.075], amount: 0.2, shift: [0, 0, 0.0035] } },
   { muscle: 'mentalis', label: 'Kinn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.483], r: [0.017, 0.011] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, 0.5, 1], amount: 0.0028 } },
   { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }, { kind: 'capsule', a: [0.019, 1.61], b: [0.042, 1.6], r: 0.0085 }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.22 } } },
-  { muscle: 'levatorLabii', label: 'Oberlippe', side: 'pair', cores: [{ kind: 'capsule', a: [0.02, 1.568], b: [0.021, 1.544], r: 0.0065 }], fibre: { kind: 'along', angle: 84 }, motion: { kind: 'shift', dir: [0.1, 1, 0.2], amount: 0.0022 } },
-  { muscle: 'zygomaticus', label: 'Jochbein', side: 'pair', cores: [{ kind: 'capsule', a: [0.066, 1.566], b: [0.036, 1.532], r: 0.009 }], fibre: { kind: 'along', angle: 49 }, motion: { kind: 'toward', to: [0.06, 1.57, 0.05], amount: 0.16 } },
+  { muscle: 'levatorLabii', label: 'Oberlippe', side: 'pair', cores: [{ kind: 'capsule', a: [0.02, 1.568], b: [0.021, 1.544], r: 0.0065 }], fibre: { kind: 'along', angle: 84 }, motion: { kind: 'shift', dir: [0.1, 1, 0.2], amount: 0.0022 }, moves: { down: { kind: 'shift', dir: [0, -1, -0.15], amount: 0.003 } } },
+  { muscle: 'zygomaticus', label: 'Jochbein', side: 'pair', cores: [{ kind: 'capsule', a: [0.066, 1.566], b: [0.036, 1.532], r: 0.009 }], fibre: { kind: 'along', angle: 49 }, motion: { kind: 'toward', to: [0.06, 1.57, 0.05], amount: 0.16 }, moves: { down: { kind: 'shift', dir: [-0.15, -1, -0.1], amount: 0.004 } } },
   { muscle: 'buccinator', label: 'Wange', side: 'pair', cores: [{ kind: 'ellipse', c: [0.064, 1.517], r: [0.013, 0.015] }], fibre: { kind: 'along', angle: 6 }, motion: { kind: 'swell', amount: -0.0015 } },
   { muscle: 'depressor', label: 'Mundwinkel', side: 'pair', cores: [{ kind: 'capsule', a: [0.033, 1.499], b: [0.042, 1.482], r: 0.0065 }], fibre: { kind: 'along', angle: 66 }, motion: { kind: 'shift', dir: [0.2, -1, 0], amount: 0.0022 } },
   { muscle: 'masseter', label: 'Kiefer', side: 'pair', cores: [{ kind: 'capsule', a: [0.097, 1.563], b: [0.091, 1.5], r: 0.015 }], fibre: { kind: 'along', angle: 82 }, motion: { kind: 'swell', amount: 0.002 } },
@@ -156,7 +156,7 @@ export type FaceAreaId = string
 export const FACE_MUSCLES: readonly string[] = FACE_AREAS.filter((a) => !a.neutral).map((a) => a.id)
 
 /** Every id `faceMuscleRig().set` takes: the muscle areas and their further movements (`<id>.<name>`). */
-export const FACE_MOVES: readonly string[] = FACE_AREAS.filter((a) => !a.neutral).flatMap((a) => [a.id, ...Object.keys(a.moves ?? {}).map((m) => `${a.id}.${m}`)])
+export const FACE_MOVES: readonly string[] = [...FACE_AREAS.filter((a) => !a.neutral).flatMap((a) => [a.id, ...Object.keys(a.moves ?? {}).map((m) => `${a.id}.${m}`)]), 'jaw']
 
 /** A world point on the head chart: [s, y] (see above). */
 export function faceChart(x: number, y: number, z: number): [number, number] {
@@ -379,10 +379,11 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
       uOutline: o.outline ?? { value: 1 },
       uShow: o.show ?? { value: 1 },
     })
-    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vRest;\nvarying vec3 vN;\nvarying vec3 vView;').replace(
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nattribute float mouthGap;\nvarying float vMouth;\nvarying vec3 vRest;\nvarying vec3 vN;\nvarying vec3 vView;').replace(
       '#include <project_vertex>',
       `#include <project_vertex>
       vRest = (modelMatrix * vec4(position, 1.0)).xyz;
+      vMouth = mouthGap;
       vec3 shapedNormal = normal;
       #ifdef USE_MORPHNORMALS
       shapedNormal *= morphTargetBaseInfluence;
@@ -397,7 +398,7 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
       .replace(
         '#include <common>',
         `#include <common>
-        varying vec3 vRest; varying vec3 vN; varying vec3 vView;
+        varying vec3 vRest; varying vec3 vN; varying vec3 vView; varying float vMouth;
         uniform vec3 uLine; uniform vec3 uBase; uniform vec3 uRim; uniform vec3 uLow; uniform vec3 uLight; uniform vec3 uLight2;
         uniform float uAct[${FACE_AREAS.length}]; uniform float uOutline; uniform float uShow;
         ${FACE_AREA_GLSL}`,
@@ -483,13 +484,22 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
           a = max(a, brow * ${dark ? '0.7' : '0.6'});
         }
 
+        // The gap between the lips (see addJawMorph; 0 on heads without it): a dark opening when the mouth
+        // opens, a fine line along the seam when it is closed.
+        {
+          float gap = smoothstep(0.12, 0.5, vMouth);
+          col = mix(col, ${dark ? 'vec3(0.0)' : 'mix(cLine, uRim, 0.35)'}, gap);
+          a = mix(a, ${dark ? '0.0' : '0.6'}, gap);
+          ${dark ? 'float lip = smoothstep(0.04, 0.12, vMouth) * (1.0 - smoothstep(0.12, 0.3, vMouth)); col = mix(col, uRim, lip * 0.7); a = max(a, lip * 0.7);' : ''}
+        }
+
         // The outline of the head and body, as on the rest of the figure.
         col = mix(col, uRim, fr * 0.8);
         a = max(a, fr * ${dark ? '0.85' : '0.8'});
         ${dark ? 'gl_FragColor = vec4(col * min(a * uShow, 1.0), 1.0);' : 'gl_FragColor = vec4(col, min(a * uShow, 1.0));'}`,
       )
   }
-  m.customProgramCacheKey = () => `face-muscles-${dark ? 'dark' : 'light'}-${FACE_AREAS.length}`
+  m.customProgramCacheKey = () => `face-muscles-mouth-${dark ? 'dark' : 'light'}-${FACE_AREAS.length}`
   return m
 }
 
@@ -639,6 +649,11 @@ export function faceMuscleRig(activation: { value: Float32Array }, meshes: THREE
   }
   return {
     set(id: string, amount: number) {
+      // The jaw opens the mouth (see `addJawMorph`); it moves the skin but lights no area.
+      if (id === 'jaw') {
+        values.set(id, amount)
+        return shape(id)
+      }
       const area = byId.get(id.split('.')[0])
       if (!area) return
       values.set(id, amount)
@@ -650,7 +665,7 @@ export function faceMuscleRig(activation: { value: Float32Array }, meshes: THREE
      * pulled a little too): adds to its own amount from `set`.
      */
     follow(id: string, amount: number) {
-      if (!byId.has(id.split('.')[0])) return
+      if (id !== 'jaw' && !byId.has(id.split('.')[0])) return
       follows.set(id, amount)
       shape(id)
     },
