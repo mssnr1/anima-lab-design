@@ -222,5 +222,5 @@ arbeitender Bereich bekommt Faserlinien und eine zarte Fläche im Signaturlicht.
 
 **Gesichtsübungen:** `src/engine/faceExercise.ts` beschreibt eine Übung als getaktete Schritte (`intro`, `steps` ×
 `repetitions`, `outro`). Jeder Schritt sagt, wie stark welche Bereiche am Ende arbeiten, und `facePose(übung, ms)`
-liefert die Pose zu jedem Zeitpunkt (Werte direkt in `rig.set`). Ein erster Entwurf „Brauen-Lift“ liegt in
-`preview/exercises.ts` (Vorschau: `?exercise=brow`, fester Zeitpunkt mit `&t=10000`).
+liefert die Pose zu jedem Zeitpunkt (Werte direkt in `rig.set`). Die Übungen selbst gehören in die App (Fayo, eigenes Repo); ein Beispiel „Brauen-Lift“ für die Vorschau liegt in
+`preview/exercises.ts` (`?exercise=brow`, fester Zeitpunkt mit `&t=10000`).

@@ -1,4 +1,4 @@
-import type { FaceExercise } from '../../src/engine/faceExercise'
+import type { FaceExercise } from '../src/engine/faceExercise'
 
 /**
  * "Brauen-Lift": the brow raiser (frontalis) works against the gentle resistance of the fingers, which

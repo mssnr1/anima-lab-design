@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import modelUrl from '../models/atmen-anatomy.glb?url'
 import { facePose } from '../src/engine/faceExercise'
-import { BROW_LIFT } from '../demo/fayo/exercises'
+import { BROW_LIFT } from './exercises'
 import { FACE_AREAS, FACE_MUSCLES, FACE_PALETTES, faceActivation, faceMuscleMaterial, faceMuscleRig, makeStripeMaterials, muscleHead, STRIPE_PALETTES } from '../src/figure'
 
 /**
