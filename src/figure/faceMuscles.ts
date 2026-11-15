@@ -85,12 +85,12 @@ const MOUTH_Y = 1.515
 const EARS: Core[] = [-1, 1].map((side) => ({ kind: 'ellipse', c: [side * 0.132, 1.585], r: [0.011, 0.022] }))
 
 const DEFS: AreaDef[] = [
-  { muscle: 'frontalis', label: 'Stirn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.662], r: [0.064, 0.03] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, 1, 0], amount: 0.0035 } },
+  { muscle: 'frontalis', label: 'Stirn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.662], r: [0.064, 0.03] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'stretch', c: [0, 1.7, 0.07], axis: [0, 1, 0], amount: -0.075 } },
   { muscle: 'corrugator', label: 'Zornesfalte', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.614], r: [0.008, 0.012] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, -0.8, -0.2], amount: 0.0025 } },
   { muscle: 'nasalis', label: 'Nase', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.566], r: [0.009, 0.026] }], fibre: { kind: 'along', angle: 0 }, motion: { kind: 'shift', dir: [0, 1, 0], amount: 0.0015 } },
   { muscle: 'orbicularisOris', label: 'Mund', side: 'mid', cores: [{ kind: 'ellipse', c: [0, MOUTH_Y + 0.001], r: [0.03, 0.019] }], fibre: { kind: 'rings', c: [0, MOUTH_Y], r: [1.6, 1] }, motion: { kind: 'toward', to: [0, MOUTH_Y, 0.075], amount: 0.2, shift: [0, 0, 0.0035] } },
   { muscle: 'mentalis', label: 'Kinn', side: 'mid', cores: [{ kind: 'ellipse', c: [0, 1.483], r: [0.017, 0.011] }], fibre: { kind: 'along', angle: 90 }, motion: { kind: 'shift', dir: [0, 0.5, 1], amount: 0.0028 } },
-  { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.4 } } },
+  { muscle: 'orbicularisOculi', label: 'Auge', side: 'pair', cores: [{ kind: 'ellipse', c: EYE, r: [0.024, 0.021] }], fibre: { kind: 'rings', c: EYE, r: [1.15, 1] }, motion: { kind: 'toward', to: [0.03, 1.59, 0.075], amount: 0.22 }, moves: { open: { kind: 'stretch', c: [0.03, 1.588, 0.075], axis: [0, 1, 0], amount: 0.3 } } },
   { muscle: 'levatorLabii', label: 'Oberlippe', side: 'pair', cores: [{ kind: 'capsule', a: [0.02, 1.568], b: [0.021, 1.544], r: 0.0065 }], fibre: { kind: 'along', angle: 84 }, motion: { kind: 'shift', dir: [0.1, 1, 0.2], amount: 0.0022 } },
   { muscle: 'zygomaticus', label: 'Jochbein', side: 'pair', cores: [{ kind: 'capsule', a: [0.066, 1.566], b: [0.036, 1.532], r: 0.009 }], fibre: { kind: 'along', angle: 49 }, motion: { kind: 'toward', to: [0.06, 1.57, 0.05], amount: 0.16 } },
   { muscle: 'buccinator', label: 'Wange', side: 'pair', cores: [{ kind: 'ellipse', c: [0.064, 1.517], r: [0.013, 0.015] }], fibre: { kind: 'along', angle: 6 }, motion: { kind: 'swell', amount: -0.0015 } },
@@ -453,16 +453,17 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
         // slanted strokes. They sit on the skin (the chart of the resting face), so they rise with it.
         {
           float bs = abs(cp.x);
-          float bt = (bs - 0.011) / 0.047;
-          float centre = 1.6135 + 0.0075 * sin(3.14159 * clamp(bt, 0.0, 1.0) * 0.8) - 0.003 * bt;
-          float bh = mix(0.0042, 0.0018, clamp(bt, 0.0, 1.0));
+          float bt = (bs - 0.014) / 0.044;
+          float centre = 1.6155 + 0.0058 * sin(3.14159 * clamp(bt, 0.0, 1.0) * 0.9) - 0.0018 * bt;
+          // Round at the inner end (no hard, frowning start), thinnest at the tail.
+          float bh = mix(0.0026, 0.0012, clamp(bt, 0.0, 1.0)) * sqrt(clamp(bt / 0.12, 0.0, 1.0));
           float dy = abs(cp.y - centre);
           float bw = fwidth(cp.y);
-          float band = (1.0 - smoothstep(bh - bw, bh + bw, dy)) * smoothstep(-0.05, 0.08, bt) * (1.0 - smoothstep(0.92, 1.0, bt));
+          float band = (1.0 - smoothstep(bh - bw, bh + bw, dy)) * (1.0 - smoothstep(0.9, 1.0, bt));
           float hair = 0.65 + 0.35 * smoothstep(0.3, 0.7, abs(fract((bs * 0.85 + (cp.y - centre) * 0.45) * 1600.0) - 0.5) * 2.0);
           float brow = band * hair;
-          col = mix(col, ${dark ? 'mix(uRim, vec3(1.0), 0.35)' : 'cLine'}, brow * ${dark ? '1.0' : '0.6'});
-          a = max(a, brow * ${dark ? '0.95' : '0.9'});
+          col = mix(col, ${dark ? 'mix(uRim, vec3(1.0), 0.2)' : 'cLine'}, brow * ${dark ? '0.6' : '0.38'});
+          a = max(a, brow * ${dark ? '0.7' : '0.6'});
         }
 
         // The outline of the head and body, as on the rest of the figure.
@@ -478,8 +479,12 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
 // ---------------------------------------------------------------------------------------------------
 // The movements.
 
-/** How softly the movement of one area hands over to its neighbour across their border (chart metres). */
-const SOFT = 0.004
+/**
+ * How far an area's movement reaches past its border (chart metres): a working area pushes its
+ * neighbours along, fading over about this distance, so the seam between them moves as one piece and
+ * keeps its width instead of being squeezed or torn.
+ */
+const PUSH = 0.014
 
 /**
  * Adds one relative morph target per moving muscle area (named by the area's id, e.g. `zygomaticusLeft`)
@@ -504,28 +509,50 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
   const w = new THREE.Vector3()
   const nw = new THREE.Vector3()
   const move = new THREE.Vector3()
+  const motionAt = (mo: Motion, at: THREE.Vector3, normal: THREE.Vector3, out: THREE.Vector3) => {
+    if (mo.kind === 'shift') return out.set(...mo.dir).normalize().multiplyScalar(mo.amount)
+    if (mo.kind === 'swell') return out.copy(normal).multiplyScalar(mo.amount)
+    if (mo.kind === 'stretch') {
+      out.set(...mo.axis).normalize()
+      return out.multiplyScalar(out.dot(new THREE.Vector3(...mo.c).sub(at).negate()) * mo.amount)
+    }
+    out.set(...mo.to).sub(at).multiplyScalar(mo.amount)
+    if (mo.shift) out.add(new THREE.Vector3(...mo.shift))
+    return out
+  }
+  // First the points of each area and how far it moves at most: past its border the skin is carried
+  // along, never further than the area itself moves (a stretch would otherwise grow without end).
+  const charts = new Float32Array(n * 2)
+  const nearestOf = new Int32Array(n)
+  const dists: number[][] = []
+  const most = moving.map(() => 0)
   for (let i = 0; i < n; i++) {
     w.fromBufferAttribute(pos, i).applyMatrix4(matrix)
     nw.fromBufferAttribute(nrm, i).applyMatrix3(normalMatrix).normalize()
     const [s, y] = faceChart(w.x, w.y, w.z)
+    charts[i * 2] = s
+    charts[i * 2 + 1] = y
     const dist = FACE_AREAS.map((a) => areaDistance(a, s, y))
-    const nearest = Math.min(...dist)
-    // Soft share of each area in this point: 1 deep inside, half on a border, fading past it.
-    const share = dist.map((d) => Math.exp(-(d - nearest) / SOFT))
-    const total = share.reduce((x, y2) => x + y2, 0)
+    dists.push(dist)
+    let best = 0
+    for (let k = 1; k < dist.length; k++) if (dist[k] < dist[best]) best = k
+    nearestOf[i] = best
     moving.forEach((a, k) => {
-      const weight = share[a.index] / total
+      if (a.index === best) most[k] = Math.max(most[k], motionAt(a.motion, w, nw, move).length())
+    })
+  }
+  for (let i = 0; i < n; i++) {
+    w.fromBufferAttribute(pos, i).applyMatrix4(matrix)
+    nw.fromBufferAttribute(nrm, i).applyMatrix3(normalMatrix).normalize()
+    const dist = dists[i]
+    const nearest = dist[nearestOf[i]]
+    // Each area moves fully up to its border (where it is the nearest) and carries the skin beyond it
+    // along, fading with the distance past the border (half the difference of the two distances).
+    moving.forEach((a, k) => {
+      const weight = Math.exp(-(((dist[a.index] - nearest) / 2 / PUSH) ** 2))
       if (weight < 1e-3) return
-      const mo = a.motion
-      if (mo.kind === 'shift') move.set(...mo.dir).normalize().multiplyScalar(mo.amount)
-      else if (mo.kind === 'swell') move.copy(nw).multiplyScalar(mo.amount)
-      else if (mo.kind === 'stretch') {
-        move.set(...mo.axis).normalize()
-        move.multiplyScalar(move.dot(new THREE.Vector3(...mo.c).sub(w).negate()) * mo.amount)
-      } else {
-        move.set(...mo.to).sub(w).multiplyScalar(mo.amount)
-        if (mo.shift) move.add(new THREE.Vector3(...mo.shift))
-      }
+      motionAt(a.motion, w, nw, move)
+      if (a.index !== nearestOf[i]) move.clampLength(0, most[k])
       move.multiplyScalar(weight / scale)
       deltas[k].set([move.x, move.y, move.z], i * 3)
     })
