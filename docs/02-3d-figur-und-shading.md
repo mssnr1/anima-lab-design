@@ -232,6 +232,6 @@ Hand sind starre Teile, die an Schulter, Ellbogen und Handgelenk (`ARM_JOINTS`, 
 ineinander übergehen. Eine Pose (`ArmGoal`: Handgelenk, Fingerrichtung, Handfläche) gilt für den linken Arm
 und wird für den rechten gespiegelt; `pose(goal, 0..1)` fährt den Weg dorthin. Die Linien bleiben auf der
 Haut, wenn das Material `posedSkin` aus `makeStripeMaterials` ist (Muster nach Ruhelage, Farbe nach aktueller
-Höhe, damit eine erhobene Hand die Farbe des Gesichts trägt). Fayo zeigt so den Brauen-Lift mit den eigenen
+Höhe, damit eine erhobene Hand die Farbe des Gesichts trägt). In Fayo am 15.11. ausprobiert und wieder entfernt:
 Zeigefingern unter den Brauen. Grenzen: die Finger bewegen sich nicht einzeln, und an der Schulter staucht
 sich der Oberarm bei weit erhobenem Arm (bei Kopf-Ausschnitt nicht im Bild).
