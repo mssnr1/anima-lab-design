@@ -397,7 +397,12 @@ export function faceMuscleMaterial(o: FaceMuscleOptions): THREE.Material {
         if (morphTargetInfluences[i] != 0.0) shapedNormal += getMorph(gl_VertexID, i, 1).xyz * morphTargetInfluences[i];
       }
       #endif
+      #ifdef USE_SKINNING
+      // A rigged figure: the normal as posed by its skeleton (and morphs).
+      vN = normalize(normalMatrix * objectNormal);
+      #else
       vN = normalize(normalMatrix * shapedNormal);
+      #endif
       vView = -mvPosition.xyz;`,
     )
     shader.fragmentShader = shader.fragmentShader
@@ -648,6 +653,10 @@ export function addMuscleMorphs(geometry: THREE.BufferGeometry, matrix: THREE.Ma
   return names
 }
 
+const X_AXIS = new THREE.Vector3(1, 0, 0)
+/** How far the jaw bone of a rigged head turns at full `jaw` (radians). */
+export const JAW_OPEN = 0.16
+
 /**
  * Drives the face: `set(id, amount)` lights an area and moves it (0 = at rest, 1 = fully working); an id
  * like `orbicularisOculiLeft.open` runs one of the area's further movements and lights the area too.
@@ -665,8 +674,16 @@ export function faceMuscleRig(activation: { value: Float32Array }, meshes: THREE
     activation.value[area.index] = v
   }
   const follows = new Map<string, number>()
+  // A rigged head opens the mouth with its jaw bone (down and back, about 9° at full amount before `gain`).
+  const jaws = [...new Set(meshes.flatMap((m) => ((m as THREE.SkinnedMesh).skeleton?.getBoneByName('DEF-jaw') ?? [])))].map((bone) => ({
+    bone,
+    rest: bone.quaternion.clone(),
+  }))
+  const turn = new THREE.Quaternion()
   const shape = (id: string) => {
     const amount = Math.min((values.get(id) ?? 0) + (follows.get(id) ?? 0), 1)
+    if (id === 'jaw')
+      for (const { bone, rest } of jaws) bone.quaternion.copy(rest).multiply(turn.setFromAxisAngle(X_AXIS, JAW_OPEN * amount * gain))
     for (const mesh of meshes) {
       const k = mesh.morphTargetDictionary?.[id]
       if (k !== undefined && mesh.morphTargetInfluences) mesh.morphTargetInfluences[k] = amount * gain

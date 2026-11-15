@@ -235,3 +235,73 @@ Haut, wenn das Material `posedSkin` aus `makeStripeMaterials` ist (Muster nach R
 Höhe, damit eine erhobene Hand die Farbe des Gesichts trägt). In Fayo am 15.11. ausprobiert und wieder entfernt:
 die Finger bewegen sich nicht einzeln (nur die Zeigefinger zu nutzen geht nicht), und an der Schulter staucht
 sich der Oberarm bei weit erhobenem Arm (bei Kopf-Ausschnitt nicht im Bild).
+
+## 10. Die geriggte Figur (Skelett), Stand 15.11.2026
+
+Neben `atmen-anatomy.glb` (ohne Skelett, für Fluo) gibt es `models/anima-figure.glb`: derselbe Körper,
+gleiche Form, Proportionen und Lage (die Gesichtsmuskel-Karte und die Führungspfeile passen unverändert),
+dazu ein Rigify-Skelett und ein dunkler Mundraum. Gebaut headless mit `blender/rig_figure.py`, Posen mit
+`blender/figure_poses.py` (Befehle in `blender/README.md`).
+
+| Datei | Was |
+| --- | --- |
+| `blender/rig_figure.py` | Lippen auftrennen, Mundraum, Rigify-Rig erzeugen, Gewichte (automatisch + von Hand), Export |
+| `blender/figure_poses.py` | Testposen auf den Rigify-Reglern, als Gelenk-Transformationen nach JSON |
+| `blender/anima-figure.blend` | Bearbeitbare Szene mit Rig und Reglern (Rigify-Add-on nötig) |
+| `models/anima-figure.glb` | Das Modell für die Apps (1,3 MB, meshopt, Positionen unquantisiert, damit die Shader die Ruhelage lesen) |
+| `models/anima-figure-poses.json` | Posen `rest`, `vHand`, `mouthO` |
+
+**Was sich bewegt:** Rumpf (Wirbelsäule), Hals, Kopf, Kiefer, Ober- und Unterlippe, beide Mundwinkel,
+Schultern, Arme, Hände, jeder Finger in drei Gliedern, Daumen, Beine. Die Organe (Lunge, Herz, Atemwege)
+hängen starr am Brustkorb. Morphs `Inhale` und `Beat` sind erhalten.
+
+**Gewichte:** zuerst automatisch (Bone Heat), dann von Hand: jeder Finger folgt nur sich selbst (keine
+Nachbarfinger werden mitgezogen, weiche Übergänge an den Gelenken und an den Schwimmhäuten), Kopf, Hals,
+Kiefer und Lippen sind als Funktion der Position gesetzt (die Nase bleibt fest, keine Dellen am Kinn), die
+Lippen sind entlang der Mundspalte aufgetrennt. Höchstens 4 Knochen pro Vertex.
+
+### Knochen (Gelenke im GLB)
+
+Nur die verformenden Knochen (`DEF-*`) sind im GLB, als ein Baum. Achtung: der GLTFLoader von three.js
+entfernt die Punkte aus Namen (`DEF-f_index.01.L` heißt dort `DEF-f_index01L`); `figureRig` findet beide Formen.
+`.L` ist die linke Seite der Figur (+x), `.R` die rechte.
+
+| Bereich | Knochen | Bewegung (lokale Achsen) |
+| --- | --- | --- |
+| Rumpf | `DEF-spine` (Becken, Wurzel), `DEF-spine.001` bis `.003` (bis Brust) | |
+| Hals, Kopf | `DEF-spine.004`, `DEF-spine.005` (Hals), `DEF-spine.006` (Kopf) | |
+| Mund | `DEF-jaw` (Kiefer, Kind des Kopfs), `DEF-lip.T`, `DEF-lip.B` (Kind des Kiefers), `DEF-lip_corner.L/.R` | Kiefer öffnet mit **+X**; Lippen und Mundwinkel werden verschoben |
+| Schulter, Arm | `DEF-shoulder`, `DEF-upper_arm` + `.001`, `DEF-forearm` + `.001`, `DEF-hand` (je `.L`/`.R`) | `.001` sind Twist-Hälften |
+| Hand | `DEF-palm.01` bis `.04` (Mittelhand) | |
+| Finger | `DEF-f_index`, `DEF-f_middle`, `DEF-f_ring`, `DEF-f_pinky`, je `.01` (Grundglied) `.02` `.03` (Spitze) | Beugen zur Handfläche **−X** (Z zeigt zum Handrücken), Spreizen um Z |
+| Daumen | `DEF-thumb.01` bis `.03` | wie Finger |
+| Beine | `DEF-pelvis`, `DEF-thigh` + `.001`, `DEF-shin` + `.001`, `DEF-foot`, `DEF-toe` (je `.L`/`.R`) | |
+
+### In der App benutzen
+
+```ts
+import modelUrl from '@anima-labs/design/models/anima-figure.glb?url'
+import poses from '@anima-labs/design/models/anima-figure-poses.json'
+import { figureRig, faceMuscleRig, muscleHead, limbAxis, legsShape } from '@anima-labs/design/figure'
+
+const gltf = await loader.loadAsync(modelUrl)        // mit MeshoptDecoder
+const bones = figureRig(gltf.scene, poses)
+bones.set({ vHand: 1 })                              // V-Hand an den Schläfen
+bones.set({ vHand: 0.5, mouthO: 1 })                 // Posen mischen, Anteil 0 bis 1
+```
+
+- Die Formen zur Laufzeit tragen die Gewichte mit: `muscleHead`/`closedHead` (Löcher geschlossen und
+  unterteilt), `legsShape`, `smoothLung`, `airwayFor`. Auf der geriggten Figur öffnet `faceMuscleRig`
+  mit `jaw` den Kiefer-Knochen (`JAW_OPEN` rad bei 1) statt des Morphs; der Mundraum `Mouth_Inner` wird dunkel
+  gezeichnet (z. B. `MeshBasicMaterial` in der Hintergrundfarbe, etwas dunkler).
+- Die Shader (`stripeMaterial`, `faceMuscleMaterial`) lesen die Ruhelage aus `position`: Linien und
+  Muskelflächen bleiben auf der Haut, die Normale kommt vom Skelett, die Farbe nach Höhe folgt der aktuellen Lage
+  (eine erhobene Hand trägt die Farbe des Gesichts). Arme mit `limbAxis` + Material `limbs`.
+- Die Vorschau zeigt das: `npm run preview:face`, dann `?model=rigged&pose=vHand&theme=dark`
+  (`&pose=mouthO`, `&cam=x,y,z,zielX,zielY,zielZ`).
+- Neue Posen: in `blender/figure_poses.py` eine Funktion auf den Rigify-Reglern schreiben (Arme mit `fk_arm`,
+  Finger mit `fingers`, Mund mit `rot`/`move`), in `POSES` eintragen, Skript laufen lassen.
+
+Bekannte kleine Schwächen: bei weit erhobenem Arm leichte Falten an der Achsel und am Unterarm nahe dem
+Handgelenk, eine kleine Falte am Knöchel des eingerollten kleinen Fingers.
+

@@ -2,14 +2,17 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import modelUrl from '../models/atmen-anatomy.glb?url'
+import riggedUrl from '../models/anima-figure.glb?url'
+import figurePoses from '../models/anima-figure-poses.json'
 import { facePose } from '../src/engine/faceExercise'
 import { BROW_LIFT } from './exercises'
-import { FACE_AREAS, FACE_MUSCLES, FACE_PALETTES, faceActivation, faceMuscleMaterial, faceMuscleRig, makeStripeMaterials, muscleHead, STRIPE_PALETTES } from '../src/figure'
+import { FACE_AREAS, FACE_MUSCLES, FACE_PALETTES, faceActivation, faceMuscleMaterial, faceMuscleRig, figureRig, legsShape, limbAxis, makeStripeMaterials, muscleHead, STRIPE_PALETTES, type FigurePoses } from '../src/figure'
 
 /**
  * A look at the face map on the shared figure, outside any app. Query parameters:
  * `theme=dark`, `view=front|side|both`, `act=zygomaticusLeft:1,frontalis:0.6` (lit and moved areas),
- * `demo` (areas take turns), `shot` (no buttons, for screenshots).
+ * `demo` (areas take turns), `shot` (no buttons, for screenshots), `model=rigged` (the figure with its skeleton)
+ * with `pose=vHand:1,mouthO:0.5` (poses from `models/anima-figure-poses.json`), `cam=x,y,z,tx,ty,tz`.
  */
 const q = new URLSearchParams(location.search)
 const dark = q.get('theme') === 'dark'
@@ -30,14 +33,21 @@ const stripes = makeStripeMaterials(STRIPE_PALETTES[dark ? 'dark' : 'light'], da
 
 const loader = new GLTFLoader()
 loader.setMeshoptDecoder(MeshoptDecoder)
-const gltf = await loader.loadAsync(modelUrl)
+const isRigged = q.get('model') === 'rigged'
+const gltf = await loader.loadAsync(isRigged ? riggedUrl : modelUrl)
 const model = gltf.scene
 model.updateMatrixWorld(true)
 const rigged: THREE.Mesh[] = []
-const copies: THREE.Mesh[] = []
+const copies: [THREE.Mesh, THREE.Object3D][] = []
 model.traverse((o) => {
   const mesh = o as THREE.Mesh
   if (!mesh.isMesh) return
+  if (mesh.name === 'Mouth_Inner') {
+    // The dark inside of the open mouth (rigged figure only).
+    mesh.material = new THREE.MeshBasicMaterial({ color: dark ? 0x05060c : 0x2b2530 })
+    mesh.renderOrder = 0.15
+    return
+  }
   if (!['Head', 'Body_Shell', 'Arms', 'Legs'].includes(mesh.name)) {
     mesh.visible = false
     return
@@ -47,17 +57,22 @@ model.traverse((o) => {
     mesh.updateMorphTargets()
     rigged.push(mesh)
   }
-  mesh.material = mesh.name === 'Head' || mesh.name === 'Body_Shell' ? faceMaterial : stripes.skin
+  if (mesh.name === 'Legs') mesh.geometry = legsShape(mesh)
+  if (mesh.name === 'Arms' && isRigged) limbAxis(mesh)
+  mesh.material = mesh.name === 'Head' || mesh.name === 'Body_Shell' ? faceMaterial : mesh.name === 'Arms' && isRigged ? stripes.limbs : stripes.skin
   mesh.renderOrder = 0.2
   const depth = mesh.clone(false)
   depth.material = stripes.skinDepth
   depth.renderOrder = 0.1
-  copies.push(depth)
+  copies.push([depth, mesh.parent ?? model])
   if (mesh.name === 'Head') rigged.push(depth)
 })
-copies.forEach((c) => model.add(c))
+copies.forEach(([c, parent]) => parent.add(c))
 scene.add(model)
 const rig = faceMuscleRig(activation, rigged, q.has('still') ? 0 : 1)
+
+const bones = figureRig(model, figurePoses as FigurePoses)
+bones.set(Object.fromEntries((q.get('pose') ?? '').split(',').filter(Boolean).map((p) => [p.split(':')[0], Number(p.split(':')[1] ?? 1)])))
 
 for (const part of (q.get('act') ?? '').split(',').filter(Boolean)) {
   const [id, amount] = part.split(':')
@@ -83,6 +98,11 @@ const cams = (view === 'both' ? ['front', 'side'] : [view]).map((v) => {
   const dist = 0.62
   cam.position.set(Math.sin(angle) * dist, target.y + 0.04, Math.cos(angle) * dist)
   cam.lookAt(target)
+  const c = q.get('cam')?.split(',').map(Number)
+  if (c?.length === 6) {
+    cam.position.set(c[0], c[1], c[2])
+    cam.lookAt(c[3], c[4], c[5])
+  }
   return cam
 })
 

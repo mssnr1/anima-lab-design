@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { pushMixedSkin, readSkin, writeSkin } from './skin'
 
 /** One open edge loop of a mesh: vertex ids in boundary order, with its size and outward direction. */
 export type HoleLoop = { verts: number[]; center: THREE.Vector3; normal: THREE.Vector3; length: number; radius: number; aspect: number }
@@ -11,7 +12,7 @@ export type HoleLoop = { verts: number[]; center: THREE.Vector3; normal: THREE.V
  * over the brows and lips, a shallow bowl over each eye socket, so the lines
  * dip in and hint at its depth.
  *
- * Returns a new non-quantized geometry (position, normal, index) or null when
+ * Returns a new non-quantized geometry (position, normal, index, and skin weights when the mesh has them) or null when
  * the mesh has no index. `scale` turns local units into metres.
  */
 export function withHolesFilled(geometry: THREE.BufferGeometry, scale: number): THREE.BufferGeometry | null {
@@ -30,9 +31,12 @@ export function withHolesFilled(geometry: THREE.BufferGeometry, scale: number): 
     normals.push(v.x, v.y, v.z)
   }
   const indices = Array.from({ length: index.count }, (_, i) => index.getX(i))
+  // A rigged head keeps its skin weights; cap points move with the rim they close.
+  const skin = readSkin(geometry)
   const loops = findHoles(positions, indices)
   const P = (i: number) => new THREE.Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2])
-  const add = (p: THREE.Vector3, nrm: THREE.Vector3) => {
+  const add = (p: THREE.Vector3, nrm: THREE.Vector3, from: ReadonlyArray<readonly [number, number]>) => {
+    if (skin) pushMixedSkin(skin, from)
     positions.push(p.x, p.y, p.z)
     normals.push(nrm.x, nrm.y, nrm.z)
     return positions.length / 3 - 1
@@ -44,8 +48,11 @@ export function withHolesFilled(geometry: THREE.BufferGeometry, scale: number): 
     if (loop.aspect < 2.2 && loop.radius * scale > 0.006) {
       // A round hole (an eye): a bowl, two rings sinking toward a centre point.
       const depth = radius * 0.55
-      const ring = verts.map((id) => add(P(id).lerp(center, 0.5).addScaledVector(normal, -depth * 0.7), normal))
-      const mid = add(center.clone().addScaledVector(normal, -depth), normal)
+      const all = verts.map((id) => [id, 1 / verts.length] as const)
+      const ring = verts.map((id) =>
+        add(P(id).lerp(center, 0.5).addScaledVector(normal, -depth * 0.7), normal, [[id, 0.5], ...all.map(([k, s]) => [k, s * 0.5] as const)]),
+      )
+      const mid = add(center.clone().addScaledVector(normal, -depth), normal, all)
       for (let i = 0; i < verts.length; i++) {
         const j = (i + 1) % verts.length
         indices.push(verts[j], verts[i], ring[i], verts[j], ring[i], ring[j])
@@ -78,6 +85,7 @@ export function withHolesFilled(geometry: THREE.BufferGeometry, scale: number): 
   out.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   out.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
   out.setIndex(indices)
+  if (skin) writeSkin(out, skin)
   out.computeBoundingSphere()
   out.computeBoundingBox()
   return out

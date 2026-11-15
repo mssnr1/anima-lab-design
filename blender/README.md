@@ -73,3 +73,26 @@ python -I blender/render_preview.py blender/atmen-anatomy.blend blender/preview.
 ```
 
 The build takes about four minutes on a laptop CPU.
+
+## Rigged figure (`anima-figure`, this repo)
+
+`rig_figure.py` turns `atmen-anatomy.blend` into the rigged figure: the lips cut apart along the mouth, a dark
+mouth inside, a Rigify rig (head, neck, jaw, lips, arms, hands with every finger joint, legs), skin weights
+(bone heat, then set by hand at the fingers, head, jaw and lips), and the export. `figure_poses.py` sets test
+poses on the rig's controls and writes them as joint transforms. Run from the repo root with Blender as a
+Python module (`pip install bpy`, Rigify ships with it) or with `blender -b -P <script> -- <args>`:
+
+```sh
+python3 -I blender/rig_figure.py blender/atmen-anatomy.blend build/
+python3 -I blender/figure_poses.py build/anima-figure.blend build/anima-figure.glb models/anima-figure-poses.json
+cp build/anima-figure.blend blender/
+# compress: keep positions as floats (the shaders read the rest position; a skinned mesh can't carry the
+# dequantizing node transform), quantize normals and weights, meshopt
+```
+
+The compression step (gltf-transform: `dedup`, `prune`, `reorder`, `quantize` on NORMAL/JOINTS/WEIGHTS only,
+`EXT_meshopt_compression` with the filter method) is in `compress_figure.mjs`:
+`node blender/compress_figure.mjs build/anima-figure.glb models/anima-figure.glb`.
+
+The rest pose is the original figure to within 1e-7 m. Bone names and how the apps use them:
+`docs/02-3d-figur-und-shading.md`, section 10. Licence as above; the credit's "Changes" now include the rig.

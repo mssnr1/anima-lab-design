@@ -1,13 +1,14 @@
 # Licences
 
-## 3D model (`models/`, `blender/atmen-anatomy.blend`, `blender/preview.png`)
+## 3D model (`models/`, `blender/atmen-anatomy.blend`, `blender/anima-figure.blend`, `blender/preview.png`)
 
 Licensed under **CC BY-SA 4.0**. Anyone who redistributes it, changed or not, must keep this credit and share it
 under CC BY-SA 4.0:
 
 > Anatomy adapted from "Z-Anatomy – The libre 3D atlas of anatomy" (CC BY-SA 4.0)
 > and "BodyParts3D, © The Database Center for Life Science" (CC BY-SA 2.1 Japan).
-> Changes: selection, simplification, materials, breathing shape keys.
+> Changes: selection, simplification, materials, breathing shape keys; for `anima-figure` also a skeleton (rig,
+> skin weights), lips cut apart and a mouth interior.
 
 - Z-Anatomy: https://github.com/Z-Anatomy/Models-of-human-anatomy
 - BodyParts3D: https://dbarchive.biosciencedbc.jp/en/bodyparts3d/
