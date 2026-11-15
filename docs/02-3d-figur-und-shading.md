@@ -187,3 +187,51 @@ Die Figur ist auf Atmen gebaut. Für Gesichtsyoga reicht sie so nicht:
 - Nicht verwenden: die NC-lizenzierten Teile der Vorlage (Innenohr, Niere), die Gehirnmodelle der University
   of Washington, Wikipedia-Texte, Schriften und Bilder aus der Vorlage. Der Build entfernt sie.
 - Schrift Figtree: SIL Open Font License.
+
+---
+
+## 9. Gesichtsmuskeln (Fayo/Mimo), Stand 15.11.2026
+
+`src/figure/faceMuscles.ts` legt eine **Karte der mimischen Muskulatur** über Kopf und Hals, vereinfacht wie
+die Lunge in Fluo: ruhige, rund geformte Bereiche statt anatomischer Einzelteile.
+
+- **Keine eigenen Meshes:** Jeder Punkt der Haut gehört genau zu einem Bereich (dem mit dem nächsten Kern),
+  die Bereiche decken also die ganze Fläche lückenlos ab. Die Grenzen werden pro Pixel im Shader aus der
+  Ruheform berechnet, deshalb sind sie glatt, egal wie grob das Mesh ist, und wandern mit der Haut mit.
+- **Bereiche** (`FACE_AREAS`, paarige als `…Left`/`…Right`, links = +x der Figur): Stirn (`frontalis`),
+  Zornesfalte (`corrugator`), Nase (`nasalis`), Mund (`orbicularisOris`), Kinn (`mentalis`), Auge
+  (`orbicularisOculi`), Oberlippe (`levatorLabii`), Jochbein (`zygomaticus`), Wange (`buccinator`),
+  Mundwinkel (`depressor`), Kiefer (`masseter`), Schläfe (`temporalis`), Halsseite (`sternocleidomastoid`),
+  Hals (`platysma`); dazu die neutralen Flächen Kopf (`scalp`) und Körper (`body`).
+- **Linien:** In jedem Bereich laufen feine Linien in Faserrichtung (Ringe um Auge und Mund, senkrecht auf der
+  Stirn, schräg am Jochbein, Fächer an der Schläfe), überall mit demselben Abstand (`FIBRE_SPACING` 2,6 mm).
+  Jeder Bereich hat eine eigene Kontur knapp innerhalb seiner Grenze, an Dreier-Ecken abgerundet. Kopfhaut
+  und Körper behalten exakt die Körperlinien (`around`, Dichte 120), Rumpf, Arme und Beine laufen nahtlos weiter.
+- **Material:** `faceMuscleMaterial({ palette, dark, activation })` statt `skin` auf `Head` und `Body_Shell`
+  (mit demselben Tiefen-Vorpass). Farben `FACE_PALETTES` = Figur + Mimo-Signaturlicht (Rosé oben, Pfirsich unten).
+- **Animation:** `muscleHead(head)` (in `shapes.ts`) schließt den Kopf, teilt ihn viermal feiner (`subdivide.ts`)
+  und hängt pro beweglichem Bereich einen Morph an (nach `Calm`). `faceMuscleRig(activation, [head, headDepth])`
+  mit `rig.set('zygomaticusLeft', 0..1)` lässt den Bereich leuchten und bewegt ihn.
+- **Vorschau:** `npm run preview:face`, Parameter `theme=dark`, `view=front|side|both`, `act=frontalis:1,…`, `demo`.
+
+Offen: Die Wange nach innen (`buccinator`) zeigt kleine Risse, weil dort der Rumpf (`Body_Shell`) bis über den
+Kiefer reicht; ein eigener Kopf-Hals-Export (siehe Abschnitt 7) löst das. Am Mundspalt bleibt ein kleiner Punkt.
+
+**Tag-Look (überarbeitet):** Ruhende Muskelbereiche zeigen am Tag nur feine graue Konturen, keine Faserlinien. Erst ein
+arbeitender Bereich bekommt Faserlinien und eine zarte Fläche im Signaturlicht. Der Nachtlook bleibt unverändert.
+
+**Gesichtsübungen:** `src/engine/faceExercise.ts` beschreibt eine Übung als getaktete Schritte (`intro`, `steps` ×
+`repetitions`, `outro`). Jeder Schritt sagt, wie stark welche Bereiche am Ende arbeiten, und `facePose(übung, ms)`
+liefert die Pose zu jedem Zeitpunkt (Werte direkt in `rig.set`). Die Übungen selbst gehören in die App (Fayo, eigenes Repo); ein Beispiel „Brauen-Lift“ für die Vorschau liegt in
+`preview/exercises.ts` (`?exercise=brow`, fester Zeitpunkt mit `&t=10000`).
+
+### Arme und Hände bewegen (`armRig`)
+
+Das Modell hat kein Skelett. `armRig(armsMesh)` macht die Arme trotzdem beweglich: Oberarm, Unterarm und
+Hand sind starre Teile, die an Schulter, Ellbogen und Handgelenk (`ARM_JOINTS`, am Modell gemessen) weich
+ineinander übergehen. Eine Pose (`ArmGoal`: Handgelenk, Fingerrichtung, Handfläche) gilt für den linken Arm
+und wird für den rechten gespiegelt; `pose(goal, 0..1)` fährt den Weg dorthin. Die Linien bleiben auf der
+Haut, wenn das Material `posedSkin` aus `makeStripeMaterials` ist (Muster nach Ruhelage, Farbe nach aktueller
+Höhe, damit eine erhobene Hand die Farbe des Gesichts trägt). In Fayo am 15.11. ausprobiert und wieder entfernt:
+die Finger bewegen sich nicht einzeln (nur die Zeigefinger zu nutzen geht nicht), und an der Schulter staucht
+sich der Oberarm bei weit erhobenem Arm (bei Kopf-Ausschnitt nicht im Bild).

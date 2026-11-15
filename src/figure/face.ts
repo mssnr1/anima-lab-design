@@ -2,6 +2,8 @@ import * as THREE from 'three'
 
 /** The mouth: where the lips meet (world metres) and the half size of the slit between them. */
 export const LIPS = { y: 1.515, z: 0.08, halfWidth: 0.022, halfHeight: 0.007 }
+/** Where the head's lips meet (the seam between them, measured on the model): the mouth opens here. */
+export const MOUTH = { y: 1.53, z: 0.09 }
 
 type Hole = { verts: number[]; center: THREE.Vector3; normal: THREE.Vector3; radius: number; aspect: number; length: number }
 
@@ -80,21 +82,21 @@ export function addCalmMorph(geometry: THREE.BufferGeometry, matrix: THREE.Matri
     }
   }
 
-  // The smile: a soft groove along a curve through the lips whose ends rise, plus the corners lifting a
+  // The smile: a soft groove along the lips' seam whose ends rise, plus the corners lifting a
   // little and the cheeks rounding. Where the skin turns into the groove the lines darken (they are
   // drawn stronger where the surface turns away), so the smile shows in the lines themselves.
   const SMILE_HALF = LIPS.halfWidth * 1.35
-  const smileY = (x: number) => LIPS.y - 0.0025 + 0.009 * (x / SMILE_HALF) ** 2
+  const smileY = (x: number) => MOUTH.y + 0.007 * (x / SMILE_HALF) ** 2
   for (let i = 0; i < n; i++) {
     const p = world[i]
-    if (p.z < 0.04 || Math.abs(p.y - LIPS.y) > 0.045) continue
+    if (p.z < 0.04 || Math.abs(p.y - MOUTH.y) > 0.045) continue
     const along = 1 - smooth((Math.abs(p.x) - SMILE_HALF * 0.85) / (SMILE_HALF * 0.3))
     const groove = Math.exp(-(((p.y - smileY(p.x)) / 0.0032) ** 2)) * along
-    moved[i].z -= 0.005 * groove
+    moved[i].z -= 0.003 * groove
     for (const side of [-1, 1]) {
       const cx = side * (LIPS.halfWidth + 0.002)
-      const w = Math.exp(-(((p.x - cx) / 0.011) ** 2) - ((p.y - LIPS.y) / 0.011) ** 2)
-      const cheek = Math.exp(-(((p.x - side * 0.04) / 0.016) ** 2) - ((p.y - (LIPS.y + 0.022)) / 0.014) ** 2)
+      const w = Math.exp(-(((p.x - cx) / 0.011) ** 2) - ((p.y - MOUTH.y) / 0.011) ** 2)
+      const cheek = Math.exp(-(((p.x - side * 0.04) / 0.016) ** 2) - ((p.y - (MOUTH.y + 0.022)) / 0.014) ** 2)
       moved[i].y += 0.003 * w + 0.0015 * cheek
       moved[i].x += side * 0.0012 * w
       moved[i].z += 0.0025 * cheek
@@ -133,5 +135,89 @@ export function addCalmMorph(geometry: THREE.BufferGeometry, matrix: THREE.Matri
   }
   geometry.morphTargetsRelative = true
   geometry.userData.calmMorph = true
+  return true
+}
+
+/**
+ * Lets the mouth open: a relative morph target `jaw` (positions and normals) that swings the lower lip,
+ * chin and jaw down round the jaw joint, and a vertex attribute `mouthGap` that tells the face shader
+ * where the gap between the lips lies (see `faceMuscleMaterial`), so it can draw the open mouth dark.
+ *
+ * The skin along the lips' seam stretches into the opening; the finer the mesh there, the cleaner the
+ * gap. `matrix` is the head's world matrix.
+ */
+export function addJawMorph(geometry: THREE.BufferGeometry, matrix: THREE.Matrix4, angle = 0.16): boolean {
+  const pos = geometry.attributes.position as THREE.BufferAttribute
+  if (!pos) return false
+  const n = pos.count
+  const world = Array.from({ length: n }, (_, i) => new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(matrix))
+  // Where the lips meet: the head's lips are joined skin (only a small hole is left between them), so
+  // the mouth opens along their seam, at MOUTH, a hair higher at the corners as the lips curve.
+  const hw = LIPS.halfWidth
+  const line = (x: number) => MOUTH.y + 0.001 * (x / hw) ** 2
+  const lips = { at: new THREE.Vector3(0, MOUTH.y, MOUTH.z) }
+  const sides = new Float32Array(n)
+  const weight = new Float32Array(n)
+  for (let i = 0; i < n; i++) {
+    const p = world[i]
+    const ly = line(Math.max(-hw, Math.min(hw, p.x)))
+    // Within the mouth the slit parts upper from lower lip; past its corners the skin stretches over a band.
+    const side = Math.max(-1, Math.min(1, (p.y - ly) / 0.0025))
+    const inMouth = Math.abs(p.x) < hw && p.z > lips.at.z - 0.02
+    // The lips' seam is marked (1 on it, 0 a millimetre off and everywhere else): opened, the skin
+    // stretched between the lips takes the mark and the shader draws it as the dark opening.
+    // Points on the seam itself (within a third of a millimetre) take the full mark, so the closed seam can be
+    // drawn as one even line.
+    sides[i] = inMouth ? 1 - Math.max(0, Math.min(1, (Math.abs(p.y - ly) - 0.0003) / 0.0025)) : 0
+    // Upper lip stays, lower lip goes with the jaw, points between the lips half way; the gap is widest in
+    // the middle and closes toward the corners, so the opening is round. Past them the skin stretches.
+    const split = (1 - side) / 2
+    const band = smooth((ly + 0.008 - p.y) / 0.026)
+    const across = inMouth ? Math.sqrt(Math.max(0, 1 - (p.x / hw) ** 2)) : 0
+    let w = band + (split - band) * across
+    // The jaw: in front of the joint, fading toward the ears and down the neck.
+    w *= smooth((p.z + 0.02) / 0.05) * (1 - smooth((Math.abs(p.x) - 0.06) / 0.03)) * smooth((p.y - 1.4) / 0.05)
+    weight[i] = w
+  }
+  const pivot = new THREE.Vector3(0, MOUTH.y + 0.035, -0.02)
+  const q = new THREE.Quaternion()
+  const inv = matrix.clone().invert()
+  const local = new THREE.Vector3()
+  const deltas = new Float32Array(n * 3)
+  for (let i = 0; i < n; i++) {
+    if (weight[i] <= 0) continue
+    q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle * weight[i])
+    const moved = world[i].clone().sub(pivot).applyQuaternion(q).add(pivot)
+    local.copy(moved).applyMatrix4(inv)
+    deltas[i * 3] = local.x - pos.getX(i)
+    deltas[i * 3 + 1] = local.y - pos.getY(i)
+    deltas[i * 3 + 2] = local.z - pos.getZ(i)
+  }
+  geometry.setAttribute('mouthGap', new THREE.Float32BufferAttribute(sides, 1))
+  // Normals of the opened shape, as differences from the resting ones.
+  const before = geometry.clone()
+  before.morphAttributes = {}
+  before.computeVertexNormals()
+  const shaped = before.clone()
+  const sp = shaped.attributes.position as THREE.BufferAttribute
+  for (let i = 0; i < n; i++) sp.setXYZ(i, pos.getX(i) + deltas[i * 3], pos.getY(i) + deltas[i * 3 + 1], pos.getZ(i) + deltas[i * 3 + 2])
+  shaped.computeVertexNormals()
+  const bn = before.attributes.normal.array
+  const sn = shaped.attributes.normal.array
+  const nd = new Float32Array(n * 3)
+  for (let i = 0; i < n * 3; i++) nd[i] = sn[i] - bn[i]
+  before.dispose()
+  shaped.dispose()
+  const dp = new THREE.Float32BufferAttribute(deltas, 3)
+  dp.name = 'jaw'
+  const dn = new THREE.Float32BufferAttribute(nd, 3)
+  dn.name = 'jaw'
+  const positions = geometry.morphAttributes.position ?? []
+  const normals = geometry.morphAttributes.normal ?? positions.map((p) => new THREE.Float32BufferAttribute(new Float32Array(p.count * 3), 3))
+  positions.push(dp)
+  normals.push(dn)
+  geometry.morphAttributes.position = positions
+  geometry.morphAttributes.normal = normals
+  geometry.morphTargetsRelative = true
   return true
 }
