@@ -47,7 +47,8 @@ src/lib/         rhythm clock, theme, lung rings
 src/brand/fluo/  Fluo's sign and wordmark
 reference/fluo/  how Fluo puts the figure together (scene, camera, stage, effects); not compiled
 blender/         reproducible model build from Z-Anatomy
-models/          the exported models: atmen-anatomy.glb (no skeleton), anima-figure.glb (rigged) + poses
+models/          the exported models: atmen-anatomy.glb (no skeleton), anima-figure.glb (rigged) + poses,
+                 anima-body.glb (MakeHuman skin + Z-Anatomy skeleton on one rig) + poses
 ```
 
 ## Develop

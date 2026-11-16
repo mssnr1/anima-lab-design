@@ -16,6 +16,17 @@ under CC BY-SA 4.0:
 Every app that shows the figure shows this credit (Fluo: Settings → Sources and licences). Details and what must
 not be used from the Z-Anatomy template: [blender/README.md](blender/README.md).
 
+## Fitted body (`models/anima-body.glb`, `models/anima-body-poses.json`, `blender/anima-body.blend`, `blender/mpfb/`)
+
+The skin, eyes, teeth, tongue, the Rigify rig and its skin weights come from **MakeHuman / MPFB** assets, released
+under **CC0 1.0** (https://github.com/makehumancommunity/mpfb2, `LICENSE.ASSETS.md`, copied to
+`blender/mpfb/data/LICENSE-CC0.md`). Only those data files are used; MPFB's add-on code (GPLv3) is not.
+The skeleton inside is Z-Anatomy / BodyParts3D geometry, so the combined model is shared under **CC BY-SA 4.0**
+with the credit above, plus:
+
+> Skin, eyes, teeth, tongue and rig: MakeHuman / MPFB assets (CC0 1.0). Changes: fitted to the Z-Anatomy figure,
+> skeleton from Z-Anatomy placed inside and attached to the rig.
+
 ## Font
 
 Figtree, SIL Open Font License 1.1 (installed from npm, `@fontsource-variable/figtree`).

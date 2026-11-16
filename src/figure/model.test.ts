@@ -66,3 +66,39 @@ describe('rigged figure model', () => {
     expect(gltf.materials.map((m: { name: string }) => m.name).sort()).toEqual(['Airway', 'Diaphragm', 'Heart', 'Lung', 'Mouth', 'Skin'])
   })
 })
+
+describe('fitted body with skeleton (MakeHuman skin, Z-Anatomy bones)', () => {
+  const gltf = gltfJson('models/anima-body.glb')
+  const nodes = gltf.nodes as { name: string; mesh?: number; skin?: number; extras?: Record<string, unknown> }[]
+  const jointNames = new Set((gltf.skins[0].joints as number[]).map((j) => nodes[j].name))
+  const poses = JSON.parse(readFileSync('models/anima-body-poses.json', 'utf8')) as Record<string, Record<string, unknown>>
+
+  it('has skin, eyes, teeth, tongue and skeleton, all skinned to one rig', () => {
+    for (const name of ['Body', 'Eyes', 'Teeth', 'Tongue', 'Skeleton']) {
+      const node = nodes.find((n) => n.name === name)
+      expect(node, name).toBeDefined()
+      expect(node!.skin, name).toBe(0)
+      expect(gltf.meshes[node!.mesh!].primitives[0].attributes.JOINTS_0, name).toBeDefined()
+    }
+    const bones = JSON.parse(nodes.find((n) => n.name === 'Skeleton')!.extras!.bone_names as string) as string[]
+    expect(bones.length).toBeGreaterThan(250)
+    expect(bones).toContain('Femur.l')
+    // Ear ossicles stay out: they sit with Z-Anatomy's NC-licensed inner ear.
+    expect(bones.some((b) => /Malleus|Incus|Stapes/.test(b))).toBe(false)
+  })
+
+  it('has the joints the poses move', () => {
+    for (const b of ['DEF-spine.006', 'DEF-jaw', 'DEF-lip.T.L', 'DEF-lip.B.L'].concat(['upper_arm', 'forearm', 'hand', 'f_index.01', 'f_pinky.03', 'thumb.03', 'thigh', 'shin', 'foot'].flatMap((b) => [`DEF-${b}.L`, `DEF-${b}.R`])))
+      expect(jointNames.has(b), b).toBe(true)
+    for (const pose of ['vHand', 'mouthO']) {
+      expect(Object.keys(poses[pose]).length, pose).toBeGreaterThan(10)
+      for (const j of Object.keys(poses[pose])) expect(jointNames.has(j), j).toBe(true)
+    }
+  })
+
+  it('names both licences', () => {
+    expect(gltf.asset.copyright).toMatch(/CC0/)
+    expect(gltf.asset.copyright).toMatch(/Z-Anatomy \(CC BY-SA 4\.0\)/)
+    expect(gltf.asset.copyright).toMatch(/BodyParts3D/)
+  })
+})

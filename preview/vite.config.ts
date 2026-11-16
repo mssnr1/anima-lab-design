@@ -7,5 +7,5 @@ export default defineConfig({
   root: __dirname,
   base: './',
   server: { fs: { allow: ['..'] } },
-  build: { outDir: resolve(__dirname, '../dist-preview'), emptyOutDir: true, target: 'es2022', rollupOptions: { input: { index: resolve(__dirname, 'index.html'), figur: resolve(__dirname, 'figur.html') } } },
+  build: { outDir: resolve(__dirname, '../dist-preview'), emptyOutDir: true, target: 'es2022', rollupOptions: { input: { index: resolve(__dirname, 'index.html'), figur: resolve(__dirname, 'figur.html'), koerper: resolve(__dirname, 'koerper.html') } } },
 })
