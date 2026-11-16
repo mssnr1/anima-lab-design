@@ -6,6 +6,7 @@ import { withHolesFilled } from './holes'
 import { tidiedLegs } from './legShape'
 import { addLimbAxis } from './limbs'
 import { simplifiedLung } from './lungShape'
+import { carrySkin } from './skin'
 import { subdivided } from './subdivide'
 
 /**
@@ -30,7 +31,10 @@ export function smoothLung(lung: THREE.Mesh, gain: number): THREE.BufferGeometry
     const side = Math.sign(at.x) || 1
     // Body midline at world x = 0; keep 3 mm off it, flattening over about 3 cm.
     shell = simplifiedLung(source, { midline: { x: -at.x / scale, side, gap: 0.003 / scale, soft: 0.03 / scale, gain } })
-    if (shell) shell.userData.simplified = true
+    if (shell) {
+      shell.userData.simplified = true
+      carrySkin(source, shell)
+    }
     source.userData.shell = shell
   }
   return shell ?? source
@@ -76,8 +80,9 @@ export function muscleHead(head: THREE.Mesh): THREE.BufferGeometry {
       return wa.z > 0.02 && wb.z > 0.02 && (brows || mouth) && wa.distanceTo(wb) > 0.003
     })
     addMuscleMorphs(made, head.matrixWorld)
-    // The mouth can open (`jaw`), and the face shader draws the gap between the lips.
-    addJawMorph(made, head.matrixWorld)
+    // The mouth can open (`jaw`), and the face shader draws the gap between the lips. A rigged head opens
+    // it with its jaw bone instead (see `faceMuscleRig`), round a mouth of its own.
+    if (!made.getAttribute('skinIndex')) addJawMorph(made, head.matrixWorld)
     source.userData.muscles = made
   }
   return made
@@ -97,6 +102,7 @@ export function legsShape(legs: THREE.Mesh): THREE.BufferGeometry {
     legs.updateWorldMatrix(true, false)
     tidied = tidiedLegs(source, legs.matrixWorld)
     tidied.userData.tidied = true
+    carrySkin(source, tidied)
     source.userData.legs = tidied
   }
   return tidied
@@ -113,6 +119,7 @@ export function airwayFor(trachea: THREE.Mesh): THREE.BufferGeometry | null {
     trachea.parent.updateWorldMatrix(true, false)
     tree = airwaySurface()
     tree.applyMatrix4(trachea.parent.matrixWorld.clone().invert())
+    carrySkin(trachea.geometry, tree)
     trachea.geometry.userData.tree = tree
   }
   return tree

@@ -94,12 +94,13 @@ export function stripeMaterial(o: StripeOptions): THREE.Material {
       ...(o.edges ? { uEdgeMap: o.edges.map, uEdgeSize: o.edges.size, uEdgeR: o.edges.radius } : {}),
     })
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vRest;\nvarying vec3 vN;\nvarying vec3 vView;${o.limb ? '\nattribute vec2 axis;\nvarying vec2 vAxis;' : ''}${o.rest ? '\nattribute vec3 rest;\nvarying float vHeight;' : ''}`)
+      .replace('#include <common>', `#include <common>\nvarying vec3 vRest;\nvarying vec3 vN;\nvarying vec3 vView;${o.limb ? '\nattribute vec2 axis;\nvarying vec2 vAxis;' : ''}\nvarying float vHeight;${o.rest ? '\nattribute vec3 rest;' : ''}`)
       .replace(
         '#include <project_vertex>',
         `#include <project_vertex>
         vRest = (modelMatrix * vec4(${o.rest ? 'rest' : 'position'}, 1.0)).xyz;
-        ${o.rest ? '// The colour goes by where the skin is now (a hand raised to the face takes the face\'s colour); the lines by where it rests.\n        vHeight = (modelMatrix * vec4(position, 1.0)).y;' : ''}
+        // The colour goes by where the skin is now (a hand raised to the face takes the face's colour); the lines by where it rests.
+        vHeight = (modelMatrix * vec4(transformed, 1.0)).y;
         ${o.limb ? `vAxis = (modelMatrix * vec4(axis.x, ${o.rest ? 'rest' : 'position'}.y, axis.y, 1.0)).xz;` : ''}
         // The normal follows the morph targets too (e.g. the calm face), so the rim and line strength follow the shape.
         vec3 shapedNormal = normal;
@@ -109,14 +110,19 @@ export function stripeMaterial(o: StripeOptions): THREE.Material {
           if (morphTargetInfluences[i] != 0.0) shapedNormal += getMorph(gl_VertexID, i, 1).xyz * morphTargetInfluences[i];
         }
         #endif
+        #ifdef USE_SKINNING
+        // A rigged figure: the normal as posed by its skeleton (and morphs).
+        vN = normalize(normalMatrix * objectNormal);
+        #else
         vN = normalize(normalMatrix * shapedNormal);
+        #endif
         vView = -mvPosition.xyz;`,
       )
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
-        varying vec3 vRest; varying vec3 vN; varying vec3 vView;${o.limb ? ' varying vec2 vAxis;' : ''}${o.rest ? ' varying float vHeight;' : ''}
+        varying vec3 vRest; varying vec3 vN; varying vec3 vView; varying float vHeight;${o.limb ? ' varying vec2 vAxis;' : ''}
         uniform vec3 uLine; uniform vec3 uFill; uniform vec3 uRim;
         uniform float uDensity; uniform float uWidth; uniform float uLineA; uniform float uFillA; uniform float uRimA; uniform float uLevel; uniform float uDim; uniform float uShow;
         uniform vec3 uLow; uniform vec3 uLowFill; uniform vec2 uRange; uniform float uPulse; uniform vec3 uPulseC; uniform float uFillLit; uniform vec3 uDimC;
@@ -135,7 +141,7 @@ export function stripeMaterial(o: StripeOptions): THREE.Material {
         ${o.rimEdge ? `fr = smoothstep(${o.rimEdge[0].toFixed(3)}, ${o.rimEdge[1].toFixed(3)}, fr);` : ''}
         float focus = 1.0;
         ${o.focusTrunk ? 'line *= mix(0.3, 1.0, smoothstep(0.05, 0.5, fr));' : ''}
-        float low = 1.0 - smoothstep(uRange.x, uRange.y, ${o.rest ? 'vHeight' : 'vRest.y'});
+        float low = 1.0 - smoothstep(uRange.x, uRange.y, vHeight);
         vec3 cLine = mix(uLine, uLow, low);
         vec3 cFill = mix(uFill, uLowFill, low * 0.8);
         vec3 cRim = ${o.rimPlain ? 'uRim' : 'mix(uRim, uLow, low * 0.7)'};

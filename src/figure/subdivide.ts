@@ -1,10 +1,11 @@
 import * as THREE from 'three'
+import { pushMixedSkin, readSkin, writeSkin } from './skin'
 
 /**
  * Splits every triangle of an indexed mesh into four, placing each new point on a smooth curve between
  * the two corners of its edge (a cubic that leaves each corner along its surface, so the mesh rounds
- * out instead of staying faceted). Normals and morph targets are carried over (averaged at the new
- * points). The head is coarse (7 000 faces): its face moves more smoothly with four times the points.
+ * out instead of staying faceted). Normals, morph targets and skin weights are carried over (averaged at
+ * the new points). The head is coarse (7 000 faces): its face moves more smoothly with four times the points.
  *
  * Returns a new geometry; the first vertices keep their ids and positions.
  */
@@ -19,6 +20,7 @@ export function subdivided(geometry: THREE.BufferGeometry, split?: (a: THREE.Vec
   const N: number[] = Array.from({ length: n * 3 }, (_, i) => nrm.array[i])
   const morphP = (geometry.morphAttributes.position ?? []).map((m) => Array.from(m.array as ArrayLike<number>))
   const morphN = (geometry.morphAttributes.normal ?? []).map((m) => Array.from(m.array as ArrayLike<number>))
+  const skin = readSkin(geometry)
   const mids = new Map<string, number>()
   const a3 = new THREE.Vector3()
   const b3 = new THREE.Vector3()
@@ -45,6 +47,7 @@ export function subdivided(geometry: THREE.BufferGeometry, split?: (a: THREE.Vec
     const nm = na.clone().add(nb).normalize()
     N.push(nm.x, nm.y, nm.z)
     for (const arr of [...morphP, ...morphN]) arr.push((arr[a * 3] + arr[b * 3]) / 2, (arr[a * 3 + 1] + arr[b * 3 + 1]) / 2, (arr[a * 3 + 2] + arr[b * 3 + 2]) / 2)
+    if (skin) pushMixedSkin(skin, [[a, 0.5], [b, 0.5]])
     mids.set(key, id)
     return id
   }
@@ -79,6 +82,7 @@ export function subdivided(geometry: THREE.BufferGeometry, split?: (a: THREE.Vec
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3))
   g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3))
   g.setIndex(out)
+  if (skin) writeSkin(g, skin)
   const named = (src: THREE.BufferAttribute[] | undefined, arrays: number[][]) =>
     arrays.map((arr, i) => {
       const attr = new THREE.Float32BufferAttribute(arr, 3)
