@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import modelUrl from '../models/anima-body.glb?url'
 import bodyPoses from '../models/anima-body-poses.json'
-import { figureRig, STRIPE_PALETTES, stripeMaterial, type FigurePoses } from '../src/figure'
+import { FACE_PALETTES, faceActivation, faceMuscleMaterial, figureRig, makeStripeMaterials, STRIPE_PALETTES, stripeMaterial, type FigurePoses } from '../src/figure'
 
 /**
  * The new figure on a phone: MakeHuman skin (CC0) with the Z-Anatomy skeleton inside, both on one rig.
@@ -17,21 +17,11 @@ const scene = new THREE.Scene()
 const p = STRIPE_PALETTES.dark
 
 const skinShow = { value: 1 }
-const skin = stripeMaterial({
-  show: skinShow,
-  pattern: 'level',
-  density: 220,
-  width: 0.06,
-  line: p.body,
-  fill: p.bodyBase,
-  lineAlpha: 0.5,
-  fillAlpha: 0.9,
-  rim: p.bodyRim,
-  rimAlpha: 0.85,
-  rimPower: 1.5,
-  rest: true,
-  side: 'front',
-})
+// The figure's usual look (the apps' skin lines: running down round the trunk, blue toward the belly), riding on
+// the unposed shape so the lines stay on the skin as the figure moves.
+const skin = makeStripeMaterials(p, true, { value: 99 }, undefined, { inner: { value: 1 }, skin: skinShow }).posedSkin
+// Head and trunk carry the face muscle map, as on the apps' figure.
+const face = faceMuscleMaterial({ palette: FACE_PALETTES.dark, dark: true, activation: faceActivation() })
 const boneShow = { value: 1 }
 const bone = stripeMaterial({
   show: boneShow,
@@ -49,7 +39,7 @@ const bone = stripeMaterial({
   glow: true,
   occlude: true,
 })
-const depth = new THREE.MeshBasicMaterial({ colorWrite: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 })
+const depth = makeStripeMaterials(p, true, { value: 99 }).skinDepth
 
 const loader = new GLTFLoader()
 loader.setMeshoptDecoder(MeshoptDecoder)
@@ -70,7 +60,8 @@ model.traverse((o) => {
   const g = mesh.geometry
   g.setAttribute('rest', g.getAttribute('position').clone())
   if (mesh.name === 'Body') {
-    mesh.material = skin
+    if (!g.getAttribute('mouthGap')) g.setAttribute('mouthGap', new THREE.BufferAttribute(new Float32Array(g.getAttribute('position').count), 1))
+    mesh.material = new URLSearchParams(location.search).has('lines') ? skin : face
     mesh.renderOrder = 0.2
     const d = mesh.clone(false)
     d.material = depth
@@ -121,7 +112,7 @@ function buttons(el: HTMLElement, items: [string, string][], on: string, pick: (
 const weights: Record<string, number> = { vHand: 0, mouthO: 0 }
 const q = new URLSearchParams(location.search)
 let goal = q.get('pose') ?? 'rest'
-let focus = goal === 'rest' ? 'body' : 'head'
+let focus = q.get('focus') ?? (goal === 'rest' ? 'body' : 'head')
 buttons(document.getElementById('layers')!, [['skin', 'Haut'], ['both', 'Haut + Skelett'], ['bones', 'Skelett']], q.get('layer') ?? 'skin', (id) => setLayer(id as Layer))
 buttons(document.getElementById('poses')!, [['rest', 'Ruhe'], ['vHand', 'V-Hand'], ['mouthO', 'Mund O']], goal, (id) => {
   goal = id
@@ -161,6 +152,7 @@ if (q.get('turn')) turn = Number(q.get('turn'))
 if (q.get('zoom')) zoom = Number(q.get('zoom'))
 const cam = new THREE.PerspectiveCamera(30, 1, 0.01, 20)
 const look = new THREE.Vector3(0, 0.95, 0)
+let camDist = 0
 const clock = new THREE.Clock()
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05)
@@ -169,13 +161,14 @@ function frame() {
   renderer.setSize(w, h, false)
   for (const id of Object.keys(weights)) weights[id] += ((id === goal ? 1 : 0) - weights[id]) * Math.min(1, dt * 3)
   rig.set(weights)
-  turntable.rotation.y = turn
   // The whole body at rest; head and hands for the poses.
-  const tgt = focus === 'head' ? [1.5, 1.05] : [0.92, 3.9]
+  const tgt = focus === 'head' ? [1.5, 1.05] : focus === 'face' ? [1.57, 0.62] : [0.92, 3.9]
   look.y += (tgt[0] - look.y) * Math.min(1, dt * 3)
   cam.aspect = w / h
-  const dist = THREE.MathUtils.lerp(cam.position.z || tgt[1], tgt[1] * zoom * (w < h ? 1 : 0.75), Math.min(1, dt * 3))
-  cam.position.set(0, look.y + 0.05, dist)
+  camDist = THREE.MathUtils.lerp(camDist || tgt[1], tgt[1] * zoom * (w < h ? 1 : 0.75), Math.min(1, dt * 3))
+  const dist = camDist
+  // The camera goes round the figure (the shaders draw their maps from world positions, so the figure stays put).
+  cam.position.set(Math.sin(-turn) * dist, look.y + 0.05, Math.cos(-turn) * dist)
   cam.lookAt(0, look.y, 0)
   cam.updateProjectionMatrix()
   renderer.render(scene, cam)
